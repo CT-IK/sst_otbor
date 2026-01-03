@@ -1,0 +1,12 @@
+services:
+  postgres:
+    image: postgres:15
+    enviroment: 
+      POSTGRES_USER: winter_sobes 
+      POSTGRESS_PASSWORD: winter_pass
+      POSTGRES_DB: winter_sst
+    volumes: 
+      - postgres_data:/var/lib/postgresql/data
+
+  redis: 
+  
