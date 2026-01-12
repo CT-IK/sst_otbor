@@ -55,20 +55,28 @@ def get_telegram_id(
 TelegramId = Annotated[int, Depends(get_telegram_id)]
 
 
-async def get_user_by_telegram(
+async def get_or_create_user(
     telegram_id: int,
+    faculty_id: int,
     db: AsyncSession
 ) -> User:
-    """Получить пользователя по Telegram ID или 404"""
+    """Получить пользователя по Telegram ID или создать нового"""
     result = await db.execute(
         select(User).where(User.telegram_id == telegram_id)
     )
     user = result.scalars().first()
+    
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден. Сначала зарегистрируйтесь в боте."
+        # Автоматически создаём пользователя
+        user = User(
+            telegram_id=telegram_id,
+            first_name="Участник",  # Будет обновлено при заполнении анкеты
+            faculty_id=faculty_id,
         )
+        db.add(user)
+        await db.flush()
+        await db.refresh(user)
+    
     return user
 
 
@@ -146,8 +154,8 @@ async def get_questionnaire_form(
     
     Вызывается при открытии Mini App.
     """
-    user = await get_user_by_telegram(telegram_id, db)
     faculty, template = await get_faculty_with_template(faculty_id, db)
+    user = await get_or_create_user(telegram_id, faculty_id, db)
     
     # Проверяем статус этапа
     can_submit = (
@@ -190,7 +198,7 @@ async def save_draft(
     
     Вызывается при каждом изменении ответов (с debounce на фронте).
     """
-    user = await get_user_by_telegram(telegram_id, db)
+    user = await get_or_create_user(telegram_id, faculty_id, db)
     
     # Проверяем что шаблон существует
     result = await db.execute(
@@ -220,7 +228,7 @@ async def delete_draft(
     redis_client: redis.Redis = Depends(get_redis),
 ):
     """Удалить черновик анкеты."""
-    user = await get_user_by_telegram(telegram_id, db)
+    user = await get_or_create_user(telegram_id, faculty_id, db)
     
     draft_service = DraftService(redis_client)
     await draft_service.delete_draft(telegram_id, faculty_id)
@@ -242,8 +250,8 @@ async def submit_questionnaire(
     3. Сохраняем в PostgreSQL (Questionnaire + ApprovalQueue + UserProgress)
     4. Удаляем черновик из Redis
     """
-    user = await get_user_by_telegram(telegram_id, db)
     faculty, template = await get_faculty_with_template(faculty_id, db)
+    user = await get_or_create_user(telegram_id, faculty_id, db)
     
     # Проверяем что этап открыт
     if faculty.current_stage != StageType.QUESTIONNAIRE:
@@ -350,7 +358,7 @@ async def get_questionnaire_status(
     redis_client: redis.Redis = Depends(get_redis),
 ):
     """Получить статус анкеты пользователя."""
-    user = await get_user_by_telegram(telegram_id, db)
+    user = await get_or_create_user(telegram_id, faculty_id, db)
     
     # Факультет
     result = await db.execute(
