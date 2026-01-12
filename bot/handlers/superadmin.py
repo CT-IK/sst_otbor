@@ -330,7 +330,7 @@ async def confirm_delete_faculty(callback: CallbackQuery):
         await callback.answer("Нет доступа", show_alert=True)
         return
     
-    faculty_id = int(callback.data.split(":")[3])
+    faculty_id = int(callback.data.split(":")[2])
     
     async with async_session_maker() as db:
         result = await db.execute(
@@ -441,7 +441,7 @@ async def callback_add_admin_to_faculty(callback: CallbackQuery, state: FSMConte
         await callback.answer("Нет доступа", show_alert=True)
         return
     
-    faculty_id = int(callback.data.split(":")[3])
+    faculty_id = int(callback.data.split(":")[2])
     await state.update_data(admin_faculty_id=faculty_id)
     await state.set_state(AddAdminStates.enter_telegram_id)
     
@@ -621,7 +621,7 @@ async def confirm_remove_admin(callback: CallbackQuery):
         await callback.answer("Нет доступа", show_alert=True)
         return
     
-    admin_id = int(callback.data.split(":")[3])
+    admin_id = int(callback.data.split(":")[2])
     
     async with async_session_maker() as db:
         result = await db.execute(

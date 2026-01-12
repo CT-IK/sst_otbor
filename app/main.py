@@ -35,16 +35,13 @@ app = FastAPI(
     description="API для системы отбора в студенческий совет",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/api/docs" if settings.is_dev else None,  # Swagger только в dev
-    redoc_url="/api/redoc" if settings.is_dev else None,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
 )
 
 # CORS для Mini App
-# В проде Telegram Mini App работает с web.telegram.org
-allowed_origins = ["*"] if settings.is_dev else [
-    "https://web.telegram.org",
-    "https://telegram.org",
-]
+# Telegram Mini Apps могут открываться с разных доменов
+allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
