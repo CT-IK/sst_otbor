@@ -167,6 +167,16 @@ async def open_questionnaire_stage():
         await db.commit()
 
 
+async def main(open_stage: bool = False):
+    """Главная функция"""
+    print("🚀 Добавление дефолтных вопросов...")
+    await seed_questions()
+    
+    if open_stage:
+        print("\n🔓 Открытие этапа анкеты...")
+        await open_questionnaire_stage()
+
+
 if __name__ == "__main__":
     import argparse
     
@@ -174,9 +184,4 @@ if __name__ == "__main__":
     parser.add_argument("--open", action="store_true", help="Also open questionnaire stage")
     args = parser.parse_args()
     
-    print("🚀 Добавление дефолтных вопросов...")
-    asyncio.run(seed_questions())
-    
-    if args.open:
-        print("\n🔓 Открытие этапа анкеты...")
-        asyncio.run(open_questionnaire_stage())
+    asyncio.run(main(open_stage=args.open))
