@@ -96,7 +96,15 @@ async function init() {
         }
         
         if (!state.telegramId) {
-            throw new Error('Не удалось получить данные пользователя. Откройте анкету через бота.');
+            const debugInfo = `
+DEBUG:
+- tg: ${tg ? 'есть' : 'нет'}
+- initData: ${tg?.initData ? 'есть' : 'пусто'}
+- user: ${JSON.stringify(tg?.initDataUnsafe?.user || 'нет')}
+- URL: ${window.location.href}
+- faculty_id from URL: ${urlFacultyId || 'нет'}
+            `;
+            throw new Error('Не удалось получить данные пользователя.\n\n' + debugInfo);
         }
         
         if (!state.facultyId) {
