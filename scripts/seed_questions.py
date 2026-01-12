@@ -75,13 +75,13 @@ DEFAULT_QUESTIONS = [
         "type": "select",
         "required": True,
         "options": [
-            "Организационный",
-            "Медиа и PR",
-            "Культурно-массовый",
-            "Спортивный",
-            "Научный",
-            "Социальный",
-            "Пока не определился"
+            {"value": "org", "label": "Организационный"},
+            {"value": "media", "label": "Медиа и PR"},
+            {"value": "culture", "label": "Культурно-массовый"},
+            {"value": "sport", "label": "Спортивный"},
+            {"value": "science", "label": "Научный"},
+            {"value": "social", "label": "Социальный"},
+            {"value": "undecided", "label": "Пока не определился"}
         ]
     },
     {
@@ -90,10 +90,10 @@ DEFAULT_QUESTIONS = [
         "type": "select",
         "required": True,
         "options": [
-            "5-10 часов",
-            "10-15 часов",
-            "15-20 часов",
-            "Больше 20 часов"
+            {"value": "5-10", "label": "5-10 часов"},
+            {"value": "10-15", "label": "10-15 часов"},
+            {"value": "15-20", "label": "15-20 часов"},
+            {"value": "20+", "label": "Больше 20 часов"}
         ]
     },
     {
