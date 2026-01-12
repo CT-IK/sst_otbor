@@ -13,7 +13,7 @@ from config import settings
 
 config = context.config
 
-DB_URL = settings.db_url
+DB_URL = settings.database_url
 
 config.set_main_option("sqlalchemy.url", DB_URL) 
 

@@ -3,13 +3,22 @@ from typing import Literal
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8",
+        extra="ignore"  # Игнорировать лишние переменные из .env
+    )
 
     env: Literal["prod", "dev", "test"] = "dev"
     debug: bool = True
 
-    # PostgreSQL
-    db_url: str = "postgresql+asyncpg://big_otbor_sst:1234@localhost:5432/big_otbor_sst_db"
+    # PostgreSQL (можно задать напрямую через DB_URL или через отдельные переменные)
+    db_url: str | None = None
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_user: str = "postgres"
+    postgres_password: str = ""
+    postgres_db: str = "postgres"
 
     # Redis
     redis_host: str = "localhost"
@@ -25,10 +34,16 @@ class Settings(BaseSettings):
     super_admin_ids: str = ""
 
     # === Тестовые данные для разработки (без Telegram) ===
-    # В dev режиме можно использовать эти константы
     dev_telegram_id: int = 123456789  # Тестовый Telegram ID
     dev_faculty_id: int = 1           # Тестовый факультет
     dev_user_id: int = 1              # Тестовый пользователь
+
+    @property
+    def database_url(self) -> str:
+        """Возвращает URL для подключения к БД"""
+        if self.db_url:
+            return self.db_url
+        return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 
     @property
     def redis_url(self) -> str:
@@ -47,7 +62,6 @@ class Settings(BaseSettings):
     
     def is_super_admin(self, telegram_id: int) -> bool:
         """Проверка, является ли пользователь супер-админом"""
-        # В dev режиме все супер-админы
         if self.is_dev:
             return True
         return telegram_id in self.super_admins
