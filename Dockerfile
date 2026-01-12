@@ -1,13 +1,15 @@
 # Backend + Mini App Frontend
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-# Установка зависимостей системы
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Установка зависимостей системы (с retry для стабильности)
+RUN apt-get update --fix-missing \
+    && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Копируем requirements и устанавливаем зависимости Python
 COPY requirements.txt .
