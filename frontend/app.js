@@ -53,6 +53,11 @@ const elements = {
 // === Инициализация ===
 async function init() {
     try {
+        console.log('Init started');
+        console.log('Telegram WebApp:', tg);
+        console.log('initData:', tg?.initData);
+        console.log('initDataUnsafe:', tg?.initDataUnsafe);
+        
         // Инициализация Telegram Web App
         if (tg) {
             tg.ready();
@@ -67,13 +72,21 @@ async function init() {
             
             // Получаем данные из Telegram
             const initData = tg.initDataUnsafe;
+            console.log('User from initData:', initData?.user);
             state.telegramId = initData?.user?.id;
             
-            // faculty_id передаётся через start_param
+            // faculty_id передаётся через start_param или query_id
             const startParam = initData?.start_param;
             if (startParam) {
                 state.facultyId = parseInt(startParam, 10);
             }
+        }
+        
+        // Также проверяем URL параметры (для WebApp кнопки)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlFacultyId = urlParams.get('faculty_id');
+        if (urlFacultyId && !state.facultyId) {
+            state.facultyId = parseInt(urlFacultyId, 10);
         }
         
         // Dev режим fallback
@@ -82,8 +95,12 @@ async function init() {
             if (!state.facultyId) state.facultyId = CONFIG.DEV_FACULTY_ID;
         }
         
-        if (!state.telegramId || !state.facultyId) {
-            throw new Error('Не удалось получить данные пользователя');
+        if (!state.telegramId) {
+            throw new Error('Не удалось получить данные пользователя. Откройте анкету через бота.');
+        }
+        
+        if (!state.facultyId) {
+            throw new Error('Не указан факультет');
         }
         
         // Загружаем анкету
