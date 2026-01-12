@@ -143,8 +143,6 @@ async def seed_questions():
                 template = StageTemplate(
                     faculty_id=faculty.id,
                     stage_type=StageType.QUESTIONNAIRE,
-                    title=f"Анкета {faculty.name}",
-                    description="Анкета для вступления в Студенческий Совет",
                     questions=DEFAULT_QUESTIONS,
                     is_active=True
                 )
