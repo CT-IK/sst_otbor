@@ -1,15 +1,7 @@
 # Backend + Mini App Frontend
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim
 
 WORKDIR /app
-
-# Установка зависимостей системы (с retry для стабильности)
-RUN apt-get update --fix-missing \
-    && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
 
 # Копируем requirements и устанавливаем зависимости Python
 COPY requirements.txt .
@@ -21,6 +13,5 @@ COPY . .
 # Порт FastAPI
 EXPOSE 8000
 
-# Запуск с gunicorn + uvicorn workers
+# Запуск
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
