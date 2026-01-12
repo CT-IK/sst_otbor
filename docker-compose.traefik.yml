@@ -1,0 +1,113 @@
+# docker-compose.traefik.yml
+# SST проект с Traefik (рекомендуемый вариант)
+
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: sst_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sst_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-sst_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sst_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: sst_redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sst_backend
+    restart: always
+    environment:
+      - ENV=prod
+      - DEBUG=false
+      - DB_URL=postgresql+asyncpg://${POSTGRES_USER:-sst_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sst_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SUPER_ADMIN_IDS=${SUPER_ADMIN_IDS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+      - web  # Для Traefik
+    labels:
+      # === Traefik конфигурация ===
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      # HTTPS роутер
+      - "traefik.http.routers.sst.rule=Host(`putevod-ik.ru`) || Host(`www.putevod-ik.ru`)"
+      - "traefik.http.routers.sst.entrypoints=websecure"
+      - "traefik.http.routers.sst.tls.certresolver=letsencrypt"
+      # Сервис
+      - "traefik.http.services.sst.loadbalancer.server.port=8000"
+      # Редирект www -> без www
+      - "traefik.http.routers.sst-www.rule=Host(`www.putevod-ik.ru`)"
+      - "traefik.http.routers.sst-www.entrypoints=websecure"
+      - "traefik.http.routers.sst-www.middlewares=www-redirect"
+      - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www\\.(.*)"
+      - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://$${1}"
+      - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
+
+  # Telegram Bot
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    container_name: sst_bot
+    restart: always
+    environment:
+      - ENV=prod
+      - DEBUG=false
+      - DB_URL=postgresql+asyncpg://${POSTGRES_USER:-sst_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sst_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SUPER_ADMIN_IDS=${SUPER_ADMIN_IDS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  internal:
+    driver: bridge
+  web:
+    external: true  # Создаётся Traefik'ом
+

@@ -1,0 +1,23 @@
+# Пример: как добавить ещё один проект
+# ~/other_bot/docker-compose.yml
+
+services:
+  app:
+    image: your-other-bot:latest
+    container_name: other_bot
+    restart: always
+    environment:
+      - BOT_TOKEN=xxx
+    networks:
+      - web
+    labels:
+      # Всё что нужно - 4 строки!
+      - "traefik.enable=true"
+      - "traefik.http.routers.other.rule=Host(`other-domain.ru`)"
+      - "traefik.http.routers.other.entrypoints=websecure"
+      - "traefik.http.routers.other.tls.certresolver=letsencrypt"
+
+networks:
+  web:
+    external: true
+

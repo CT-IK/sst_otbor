@@ -1,0 +1,97 @@
+version: '3.8'
+
+# Используем внешнюю сеть для связи с nginx
+networks:
+  infra_network:
+    external: true
+  internal:
+    driver: bridge
+
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: sst_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sst_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-sst_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sst_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: sst_redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend + Mini App
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sst_backend
+    restart: always
+    environment:
+      - ENV=prod
+      - DEBUG=false
+      - DB_URL=postgresql+asyncpg://${POSTGRES_USER:-sst_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sst_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SUPER_ADMIN_IDS=${SUPER_ADMIN_IDS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+      - infra_network  # Для доступа от nginx
+    expose:
+      - "8000"
+
+  # Telegram Bot
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    container_name: sst_bot
+    restart: always
+    environment:
+      - ENV=prod
+      - DEBUG=false
+      - DB_URL=postgresql+asyncpg://${POSTGRES_USER:-sst_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sst_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SUPER_ADMIN_IDS=${SUPER_ADMIN_IDS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+  redis_data:

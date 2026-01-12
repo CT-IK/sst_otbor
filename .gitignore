@@ -1,3 +1,32 @@
-venv
-.env.prod
-.env.test
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# SSL сертификаты (ВАЖНО!)
+ssl/
+*.crt
+*.key
+*.pem
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Docker volumes (local)
+postgres_data/
+redis_data/
+DEPLOY.md

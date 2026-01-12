@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 
 from sqlalchemy import (
     Integer,
@@ -9,11 +10,27 @@ from sqlalchemy import (
     DateTime,
     Text,
     BigInteger,
+    Enum as SQLEnum,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.engine import Base
+
+
+class StageType(str, Enum):
+    """Типы этапов отбора (фиксированные для всех факультетов)"""
+    QUESTIONNAIRE = "questionnaire"  # Анкета
+    HOME_VIDEO = "home_video"        # Домашнее видео
+    INTERVIEW = "interview"          # Собеседование
+
+
+class StageStatus(str, Enum):
+    """Статусы этапа"""
+    NOT_STARTED = "not_started"  # Ещё не начался
+    OPEN = "open"                # Открыт для подачи
+    CLOSED = "closed"            # Приём закрыт, идёт проверка
+    COMPLETED = "completed"      # Этап завершён
 
 
 class User(Base):
@@ -46,11 +63,12 @@ class Administrator(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
-    username: Mapped[str] = mapped_column(String(50), unique=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    username: Mapped[str | None] = mapped_column(String(50), unique=True, nullable=True)  # @username в Telegram
+    full_name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Имя из Telegram
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)  # Для веб-интерфейса
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Для веб-интерфейса
     faculty_id: Mapped[int | None] = mapped_column(ForeignKey("faculty.id", ondelete="RESTRICT"), nullable=True)
-    role: Mapped[str] = mapped_column(String(30), default="faculty_admin")
+    role: Mapped[str] = mapped_column(String(30), default="faculty_admin")  # faculty_admin, super_admin
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -64,60 +82,76 @@ class Faculty(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # Управление текущим этапом отбора
+    current_stage: Mapped[StageType | None] = mapped_column(
+        SQLEnum(StageType), 
+        default=None, 
+        nullable=True
+    )  # None = отбор не начался
+    stage_status: Mapped[StageStatus] = mapped_column(
+        SQLEnum(StageStatus), 
+        default=StageStatus.NOT_STARTED
+    )
+    stage_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    stage_closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     users = relationship("User", back_populates="faculty")
     administrators = relationship("Administrator", back_populates="faculty")
-    stages = relationship("Stage", back_populates="faculty", cascade="all, delete-orphan")
-
-
-class Stage(Base):
-    """Этап отбора (анкета, видео, интервью и т.п.)"""
-    __tablename__ = "stages"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
-    name: Mapped[str] = mapped_column(String(100))
-    order: Mapped[int] = mapped_column(Integer, default=0)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    faculty = relationship("Faculty", back_populates="stages")
-    templates = relationship("StageTemplate", back_populates="stage", cascade="all, delete-orphan")
-    progress = relationship("UserProgress", back_populates="stage")
-    approvals = relationship("ApprovalQueue", back_populates="stage")
+    templates = relationship("StageTemplate", back_populates="faculty", cascade="all, delete-orphan")
 
 
 class StageTemplate(Base):
-    """Шаблон вопросов для этапа, созданный админом факультета"""
+    """
+    Шаблон вопросов для этапа, созданный админом факультета.
+    
+    Структура questions (JSON):
+    [
+        {
+            "id": "q1",
+            "text": "Почему хотите в студсовет?",
+            "type": "text",  # text | choice | multiple_choice | number
+            "required": true,
+            "order": 1,
+            "options": null,  # для choice/multiple_choice: ["вариант1", "вариант2"]
+            "max_length": 500  # для text
+        },
+        ...
+    ]
+    """
     __tablename__ = "stage_templates"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    stage_id: Mapped[int] = mapped_column(ForeignKey("stages.id", ondelete="CASCADE"))
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    stage_type: Mapped[StageType] = mapped_column(SQLEnum(StageType))  # К какому этапу относится
     version: Mapped[int] = mapped_column(Integer, default=1)
     questions: Mapped[dict] = mapped_column(JSON)  # JSONB in Postgres
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    stage = relationship("Stage", back_populates="templates")
+    faculty = relationship("Faculty", back_populates="templates")
     creator = relationship("Administrator", lazy="joined")
 
 
 class Questionnaire(Base):
-    """Анкета, заполненная пользователем (черновик или финальная)"""
+    """
+    Финальная анкета, отправленная пользователем.
+    Черновики хранятся в Redis, здесь только отправленные.
+    """
     __tablename__ = "questionnaires"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
     template_id: Mapped[int | None] = mapped_column(ForeignKey("stage_templates.id", ondelete="SET NULL"), nullable=True)
-    answers: Mapped[dict] = mapped_column(JSON, default={})
-    is_draft: Mapped[bool] = mapped_column(Boolean, default=True)
-    status: Mapped[str] = mapped_column(String(30), default="in_progress")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+    answers: Mapped[dict] = mapped_column(JSON)  # Финальные ответы
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="questionnaires")
+    faculty = relationship("Faculty")
     template = relationship("StageTemplate")
 
 
@@ -127,27 +161,70 @@ class HomeVideo(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
     video_url: Mapped[str] = mapped_column(String(512))
-    status: Mapped[str] = mapped_column(String(30), default="in_progress")
-    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Telegram file_id
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="home_videos")
+    faculty = relationship("Faculty")
+
+
+class InterviewSlot(Base):
+    """Слоты для записи на собеседование"""
+    __tablename__ = "interview_slots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    datetime_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    datetime_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    max_participants: Mapped[int] = mapped_column(Integer, default=1)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Аудитория/ссылка
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    faculty = relationship("Faculty")
+    creator = relationship("Administrator")
+    interviews = relationship("Interview", back_populates="slot")
+
+
+class InterviewStatus(str, Enum):
+    """Статусы собеседования"""
+    SCHEDULED = "scheduled"      # Назначено
+    COMPLETED = "completed"      # Проведено
+    NO_SHOW = "no_show"          # Не пришёл
+    CANCELLED = "cancelled"      # Отменено
 
 
 class Interview(Base):
-    """Результаты собеседования"""
+    """Запись на собеседование и результаты"""
     __tablename__ = "interviews"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(30), default="scheduled")
-    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    slot_id: Mapped[int | None] = mapped_column(ForeignKey("interview_slots.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[InterviewStatus] = mapped_column(
+        SQLEnum(InterviewStatus), 
+        default=InterviewStatus.SCHEDULED
+    )
+    interviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Оценка 1-10
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User", back_populates="interviews")
+    faculty = relationship("Faculty")
+    slot = relationship("InterviewSlot", back_populates="interviews")
+
+
+class SubmissionStatus(str, Enum):
+    """Статусы заявки пользователя"""
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"  # Начал заполнять
+    SUBMITTED = "submitted"      # Отправил на проверку
+    APPROVED = "approved"        # Одобрено
+    REJECTED = "rejected"        # Отклонено
 
 
 class UserProgress(Base):
@@ -156,14 +233,26 @@ class UserProgress(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    stage_id: Mapped[int] = mapped_column(ForeignKey("stages.id", ondelete="CASCADE"))
-    status: Mapped[str] = mapped_column(String(30), default="not_started")
-    answers: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    stage_type: Mapped[StageType] = mapped_column(SQLEnum(StageType))
+    status: Mapped[SubmissionStatus] = mapped_column(
+        SQLEnum(SubmissionStatus), 
+        default=SubmissionStatus.NOT_STARTED
+    )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user = relationship("User", back_populates="progress")
-    stage = relationship("Stage", back_populates="progress")
+    faculty = relationship("Faculty")
+
+
+class ApprovalStatus(str, Enum):
+    """Статусы проверки"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class ApprovalQueue(Base):
@@ -172,20 +261,40 @@ class ApprovalQueue(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    stage_id: Mapped[int] = mapped_column(ForeignKey("stages.id", ondelete="CASCADE"))
-    answers: Mapped[dict] = mapped_column(JSON)
-    status: Mapped[str] = mapped_column(String(30), default="pending")
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    stage_type: Mapped[StageType] = mapped_column(SQLEnum(StageType))
+    answers: Mapped[dict] = mapped_column(JSON)  # Ответы на момент отправки
+    status: Mapped[ApprovalStatus] = mapped_column(
+        SQLEnum(ApprovalStatus), 
+        default=ApprovalStatus.PENDING
+    )
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # Комментарий проверяющего
 
     user = relationship("User", back_populates="approvals")
-    stage = relationship("Stage", back_populates="approvals")
+    faculty = relationship("Faculty")
     reviewer = relationship("Administrator", lazy="joined")
 
 
+class AdminActionLog(Base):
+    """
+    Лог действий администраторов для аналитики.
+    Записываем все важные действия: смена этапа, одобрение/отклонение заявок и т.д.
+    """
+    __tablename__ = "admin_action_logs"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    admin_id: Mapped[int] = mapped_column(ForeignKey("administrators.id", ondelete="CASCADE"))
+    faculty_id: Mapped[int | None] = mapped_column(ForeignKey("faculty.id", ondelete="SET NULL"), nullable=True)
+    action: Mapped[str] = mapped_column(String(50))  # stage_opened, stage_closed, submission_approved, etc.
+    target_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # user, stage, template
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # Дополнительные данные
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    admin = relationship("Administrator", lazy="joined")
+    faculty = relationship("Faculty")
 
 
