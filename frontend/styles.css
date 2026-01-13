@@ -114,6 +114,15 @@ body {
     color: var(--tg-theme-hint-color);
 }
 
+.hint-text {
+    margin-top: var(--spacing);
+    padding: var(--spacing);
+    background: var(--tg-theme-secondary-bg-color);
+    border-radius: var(--border-radius);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
 /* === Buttons === */
 .btn {
     padding: 14px 28px;

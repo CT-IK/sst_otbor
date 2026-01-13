@@ -108,7 +108,8 @@ DEBUG:
         }
         
         if (!state.facultyId) {
-            throw new Error('Не указан факультет');
+            showNoFacultyError();
+            return;
         }
         
         // Проверяем, является ли пользователь админом
@@ -717,6 +718,11 @@ function showError(message) {
     elements.errorMessage.textContent = message;
     showScreen('error');
     
+    if (tg) tg.MainButton.hide();
+}
+
+function showNoFacultyError() {
+    showScreen('no-faculty');
     if (tg) tg.MainButton.hide();
 }
 
