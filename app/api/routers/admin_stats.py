@@ -296,7 +296,7 @@ async def get_faculty_responses(
             telegram_id=user.telegram_id,
             user_name=user_name,
             answers=questionnaire.answers,
-            submitted_at=questionnaire.created_at,
+            submitted_at=questionnaire.submitted_at,
             status=status,
         ))
     
