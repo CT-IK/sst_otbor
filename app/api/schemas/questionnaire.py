@@ -61,6 +61,8 @@ class DraftWithTemplateResponse(BaseModel):
     draft: DraftResponse | None = None
     stage_status: str = Field(description="Статус этапа факультета")
     can_submit: bool = Field(description="Можно ли отправить анкету")
+    already_submitted: bool = Field(default=False, description="Уже отправлял анкету")
+    submitted_at: datetime | None = Field(default=None, description="Когда отправил")
 
 
 # === Отправка анкеты ===

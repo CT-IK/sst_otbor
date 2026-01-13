@@ -24,6 +24,7 @@ from db.models import (
 )
 from app.core.redis import get_redis
 from app.services.draft_service import DraftService
+from app.services.notification_service import notification_service
 from app.api.schemas.questionnaire import (
     TemplateResponse, Question, DraftSaveRequest, DraftResponse,
     DraftWithTemplateResponse, SubmitQuestionnaireRequest,
@@ -157,31 +158,46 @@ async def get_questionnaire_form(
     faculty, template = await get_faculty_with_template(faculty_id, db)
     user = await get_or_create_user(telegram_id, faculty_id, db)
     
+    # Проверяем, отправлял ли уже анкету
+    result = await db.execute(
+        select(Questionnaire).where(
+            Questionnaire.user_id == user.id,
+            Questionnaire.faculty_id == faculty_id,
+        )
+    )
+    existing_questionnaire = result.scalars().first()
+    already_submitted = existing_questionnaire is not None
+    submitted_at = existing_questionnaire.created_at if existing_questionnaire else None
+    
     # Проверяем статус этапа
     can_submit = (
         faculty.current_stage == StageType.QUESTIONNAIRE and
-        faculty.stage_status == StageStatus.OPEN
+        faculty.stage_status == StageStatus.OPEN and
+        not already_submitted  # Нельзя отправить повторно!
     )
     
-    # Получаем черновик из Redis
-    draft_service = DraftService(redis_client)
-    draft_data = await draft_service.get_draft(telegram_id, faculty_id)
-    
+    # Получаем черновик из Redis (только если ещё не отправил)
     draft_response = None
-    if draft_data:
-        ttl = await draft_service.get_draft_ttl(telegram_id, faculty_id)
-        draft_response = DraftResponse(
-            template_id=draft_data["template_id"],
-            answers=draft_data["answers"],
-            updated_at=datetime.fromisoformat(draft_data["updated_at"]),
-            ttl_seconds=max(ttl, 0),
-        )
+    if not already_submitted:
+        draft_service = DraftService(redis_client)
+        draft_data = await draft_service.get_draft(telegram_id, faculty_id)
+        
+        if draft_data:
+            ttl = await draft_service.get_draft_ttl(telegram_id, faculty_id)
+            draft_response = DraftResponse(
+                template_id=draft_data["template_id"],
+                answers=draft_data["answers"],
+                updated_at=datetime.fromisoformat(draft_data["updated_at"]),
+                ttl_seconds=max(ttl, 0),
+            )
     
     return DraftWithTemplateResponse(
         template=template_to_response(faculty, template),
         draft=draft_response,
         stage_status=faculty.stage_status.value if faculty.stage_status else "not_started",
         can_submit=can_submit,
+        already_submitted=already_submitted,
+        submitted_at=submitted_at,
     )
 
 
@@ -342,6 +358,12 @@ async def submit_questionnaire(
     # Удаляем черновик из Redis
     draft_service = DraftService(redis_client)
     await draft_service.delete_draft(telegram_id, faculty_id)
+    
+    # Отправляем уведомление в Telegram
+    await notification_service.notify_questionnaire_submitted(
+        telegram_id=telegram_id,
+        faculty_name=faculty.name
+    )
     
     return SubmitQuestionnaireResponse(
         success=True,

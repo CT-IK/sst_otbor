@@ -111,14 +111,40 @@ DEBUG:
             throw new Error('Не указан факультет');
         }
         
-        // Загружаем анкету
-        await loadQuestionnaire();
+        // Проверяем, является ли пользователь админом
+        const adminCheck = await api(`/admin/check/${state.facultyId}`);
+        
+        if (adminCheck.is_admin) {
+            // Админ — показываем статистику
+            await loadAdminStats();
+        } else {
+            // Обычный пользователь — показываем анкету
+            await loadQuestionnaire();
+        }
         
     } catch (error) {
         console.error('Init error:', error);
         showError(error.message);
     }
 }
+
+// === Скрытие клавиатуры ===
+function hideKeyboard() {
+    if (document.activeElement && document.activeElement.blur) {
+        document.activeElement.blur();
+    }
+    // Для iOS
+    window.scrollTo(0, 0);
+}
+
+// Скрываем клавиатуру при клике на фон
+document.addEventListener('click', (e) => {
+    if (e.target.tagName !== 'INPUT' && 
+        e.target.tagName !== 'TEXTAREA' && 
+        e.target.tagName !== 'SELECT') {
+        hideKeyboard();
+    }
+});
 
 // === Применение темы Telegram ===
 function applyTelegramTheme() {
@@ -166,6 +192,12 @@ async function loadQuestionnaire() {
     try {
         const data = await api(`/questionnaire/${state.facultyId}`);
         
+        // Проверяем, отправлял ли уже анкету
+        if (data.already_submitted) {
+            showAlreadySubmitted(data.submitted_at);
+            return;
+        }
+        
         // Проверяем статус этапа
         if (data.stage_status === 'not_started') {
             showStageClosed();
@@ -210,6 +242,101 @@ async function loadQuestionnaire() {
             throw error;
         }
     }
+}
+
+// === Загрузка статистики для админа ===
+async function loadAdminStats() {
+    try {
+        const stats = await api(`/admin/stats/${state.facultyId}`);
+        
+        // Скрываем MainButton для админа
+        if (tg) tg.MainButton.hide();
+        
+        // Показываем экран статистики
+        renderAdminStats(stats);
+        showScreen('admin-stats');
+        
+    } catch (error) {
+        console.error('Admin stats error:', error);
+        // Если ошибка — показываем обычную анкету
+        await loadQuestionnaire();
+    }
+}
+
+// === Рендер статистики админа ===
+function renderAdminStats(stats) {
+    const container = document.getElementById('admin-stats-content');
+    if (!container) return;
+    
+    // График по дням
+    const maxCount = Math.max(...stats.daily_submissions.map(d => d.count), 1);
+    const chartBars = stats.daily_submissions.map(d => {
+        const height = (d.count / maxCount) * 100;
+        return `
+            <div class="chart-bar-wrapper">
+                <div class="chart-bar" style="height: ${height}%">
+                    <span class="chart-value">${d.count || ''}</span>
+                </div>
+                <span class="chart-label">${d.date}</span>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = `
+        <div class="stats-header">
+            <h1>📊 ${stats.faculty_name}</h1>
+            <p class="stats-subtitle">Статистика анкет</p>
+        </div>
+        
+        <div class="stats-cards">
+            <div class="stat-card primary">
+                <div class="stat-value">${stats.total_submissions}</div>
+                <div class="stat-label">Всего анкет</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value">${stats.approved_count}</div>
+                <div class="stat-label">Одобрено</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-value">${stats.pending_count}</div>
+                <div class="stat-label">На проверке</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-value">${stats.rejected_count}</div>
+                <div class="stat-label">Отклонено</div>
+            </div>
+        </div>
+        
+        <div class="stats-section">
+            <h3>📈 Заявки за 14 дней</h3>
+            <div class="chart">
+                ${chartBars}
+            </div>
+        </div>
+        
+        <div class="stats-section">
+            <h3>ℹ️ Информация</h3>
+            <div class="info-row">
+                <span>Этап:</span>
+                <span>${stats.current_stage || 'не начат'}</span>
+            </div>
+            <div class="info-row">
+                <span>Статус:</span>
+                <span>${stats.stage_status || '—'}</span>
+            </div>
+            <div class="info-row">
+                <span>Всего пользователей:</span>
+                <span>${stats.total_users}</span>
+            </div>
+        </div>
+        
+        <div class="stats-actions">
+            <a href="${window.location.origin}/admin?faculty_id=${state.facultyId}&telegram_id=${state.telegramId}" 
+               target="_blank" class="btn-link">
+                🔗 Открыть полную таблицу ответов
+            </a>
+        </div>
+    `;
 }
 
 // === Рендер вопросов ===
@@ -522,7 +649,7 @@ async function doSubmit() {
         }
         
         // Показываем успех
-        showAlreadySubmitted('Анкета успешно отправлена!');
+        showAlreadySubmitted(new Date().toISOString());
         
     } catch (error) {
         console.error('Submit error:', error);
@@ -598,12 +725,30 @@ function showStageClosed() {
     if (tg) tg.MainButton.hide();
 }
 
-function showAlreadySubmitted(message) {
-    if (message) {
-        elements.alreadySubmitted.querySelector('p').textContent = message;
-    }
+function showAlreadySubmitted(submittedAtOrMessage) {
     showScreen('already-submitted');
     if (tg) tg.MainButton.hide();
+    
+    // Показываем дату отправки или сообщение
+    if (submittedAtOrMessage && elements.submissionDate) {
+        // Если это дата (ISO формат)
+        if (submittedAtOrMessage.includes('T') || submittedAtOrMessage.includes('-')) {
+            const date = new Date(submittedAtOrMessage);
+            if (!isNaN(date.getTime())) {
+                const formatted = date.toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                elements.submissionDate.textContent = `Отправлено: ${formatted}`;
+                return;
+            }
+        }
+        // Иначе это сообщение
+        elements.submissionDate.textContent = submittedAtOrMessage;
+    }
 }
 
 // === Запуск ===

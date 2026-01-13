@@ -3,7 +3,7 @@
 Создание факультетов, назначение админов.
 """
 import logging
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -536,8 +536,21 @@ async def process_admin_telegram_id(message: Message, state: FSMContext):
     )
 
 
+def generate_password(length: int = 10) -> str:
+    """Генерация случайного пароля"""
+    import secrets
+    alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
+def hash_password(password: str) -> str:
+    """Хеширование пароля"""
+    import hashlib
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
 @superadmin_router.callback_query(F.data == "sa:confirm_admin", AddAdminStates.confirm)
-async def confirm_add_admin(callback: CallbackQuery, state: FSMContext):
+async def confirm_add_admin(callback: CallbackQuery, state: FSMContext, bot: Bot):
     """Подтвердить добавление админа"""
     if not is_super_admin(callback.from_user.id):
         await callback.answer("Нет доступа", show_alert=True)
@@ -545,7 +558,21 @@ async def confirm_add_admin(callback: CallbackQuery, state: FSMContext):
     
     data = await state.get_data()
     
+    # Генерируем пароль для админки
+    password = generate_password()
+    password_hash = hash_password(password)
+    
+    admin_telegram_id = data["admin_telegram_id"]
+    admin_username = data.get("admin_username")
+    
     async with async_session_maker() as db:
+        # Получаем название факультета
+        result = await db.execute(
+            select(Faculty).where(Faculty.id == data["admin_faculty_id"])
+        )
+        faculty = result.scalars().first()
+        faculty_name = faculty.name if faculty else "—"
+        
         if data.get("admin_existing_id"):
             # Реактивируем существующего
             result = await db.execute(
@@ -554,15 +581,17 @@ async def confirm_add_admin(callback: CallbackQuery, state: FSMContext):
             admin = result.scalars().first()
             admin.is_active = True
             admin.faculty_id = data["admin_faculty_id"]
+            admin.password_hash = password_hash  # Обновляем пароль
         else:
             # Создаём нового
             admin = Administrator(
-                telegram_id=data["admin_telegram_id"],
+                telegram_id=admin_telegram_id,
                 full_name=data.get("admin_full_name"),
-                username=data.get("admin_username"),
+                username=admin_username,
                 faculty_id=data["admin_faculty_id"],
                 role="faculty_admin",
                 is_active=True,
+                password_hash=password_hash,
             )
             db.add(admin)
         
@@ -570,11 +599,42 @@ async def confirm_add_admin(callback: CallbackQuery, state: FSMContext):
     
     await state.clear()
     
-    await callback.message.edit_text(
-        f"✅ <b>Администратор добавлен!</b>\n\n"
-        f"Telegram ID: <code>{data['admin_telegram_id']}</code>\n\n"
-        f"Теперь этот пользователь может управлять факультетом через /admin"
-    )
+    # Отправляем пароль новому админу
+    try:
+        await bot.send_message(
+            admin_telegram_id,
+            f"🎉 <b>Вы назначены администратором!</b>\n\n"
+            f"Факультет: <b>{faculty_name}</b>\n\n"
+            f"📊 <b>Данные для входа в админ-панель:</b>\n"
+            f"Логин: <code>{admin_username or admin_telegram_id}</code>\n"
+            f"Пароль: <code>{password}</code>\n\n"
+            f"🔗 Админ-панель: putevod-ik.ru/admin\n\n"
+            f"<i>Сохраните пароль! Он больше не будет показан.</i>\n\n"
+            f"Также доступно:\n"
+            f"• /admin — управление в боте\n"
+            f"• /questions — редактор вопросов"
+        )
+        password_sent = True
+    except Exception as e:
+        logger.error(f"Не удалось отправить пароль админу: {e}")
+        password_sent = False
+    
+    # Сообщение суперадмину
+    msg = f"✅ <b>Администратор добавлен!</b>\n\n"
+    msg += f"Telegram ID: <code>{admin_telegram_id}</code>\n"
+    if admin_username:
+        msg += f"Username: @{admin_username}\n"
+    msg += f"Факультет: {faculty_name}\n\n"
+    
+    if password_sent:
+        msg += "✅ Пароль отправлен админу в личные сообщения"
+    else:
+        msg += f"⚠️ Не удалось отправить пароль.\n"
+        msg += f"Передайте вручную:\n"
+        msg += f"Логин: <code>{admin_username or admin_telegram_id}</code>\n"
+        msg += f"Пароль: <code>{password}</code>"
+    
+    await callback.message.edit_text(msg)
     await callback.answer("Добавлено!")
 
 

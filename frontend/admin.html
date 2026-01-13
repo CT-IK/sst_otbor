@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ панель — Ответы на анкеты</title>
+    
+    <style>
+        :root {
+            --bg-color: #0f0f23;
+            --card-bg: #1a1a2e;
+            --text-color: #e4e4e7;
+            --text-muted: #71717a;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --border: #27272a;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+        
+        .header .faculty-name {
+            color: var(--accent);
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+        
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--accent);
+        }
+        
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+        
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        
+        .stat-card.accent .value { color: var(--accent); }
+        .stat-card.success .value { color: var(--success); }
+        .stat-card.warning .value { color: var(--warning); }
+        .stat-card.danger .value { color: var(--danger); }
+        
+        /* Table */
+        .table-container {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .table-header h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        
+        th, td {
+            padding: 1rem 1.5rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        th {
+            background: rgba(99, 102, 241, 0.1);
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+        
+        tr:hover {
+            background: rgba(99, 102, 241, 0.05);
+        }
+        
+        td {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .status-submitted { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .status-approved { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .status-rejected { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        
+        /* Loading */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            color: var(--text-muted);
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Error */
+        .error {
+            text-align: center;
+            padding: 3rem;
+            color: var(--danger);
+        }
+        
+        /* Auth form */
+        .auth-form {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 2rem;
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+        
+        .auth-form h2 {
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-size: 1rem;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        /* Modal for answer details */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: var(--card-bg);
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+        }
+        
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h3 {
+            font-size: 1.2rem;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+        }
+        
+        .answer-item {
+            margin-bottom: 1.5rem;
+        }
+        
+        .answer-item .question {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--accent);
+        }
+        
+        .answer-item .answer {
+            background: var(--bg-color);
+            padding: 1rem;
+            border-radius: 8px;
+            white-space: pre-wrap;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Auth Form (показывается если нет доступа) -->
+        <div id="auth-section" class="auth-form" style="display: none;">
+            <h2>🔐 Вход для админа</h2>
+            <div class="form-group">
+                <label>Логин (username в Telegram)</label>
+                <input type="text" id="username-input" placeholder="@username или username">
+            </div>
+            <div class="form-group">
+                <label>Пароль</label>
+                <input type="password" id="password-input" placeholder="Пароль из бота">
+            </div>
+            <div id="login-error" style="color: var(--danger); font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
+            <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="login()" id="login-btn">
+                Войти
+            </button>
+            <p style="margin-top: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                Пароль приходит от бота при назначении админом
+            </p>
+        </div>
+        
+        <!-- Main Content -->
+        <div id="main-section" style="display: none;">
+            <!-- Header -->
+            <div class="header">
+                <h1>📊 Ответы: <span class="faculty-name" id="faculty-name">—</span></h1>
+                <div class="header-actions">
+                    <a href="#" class="btn btn-secondary" id="export-btn">
+                        📥 Скачать CSV
+                    </a>
+                    <button class="btn btn-secondary" onclick="loadData()">
+                        🔄 Обновить
+                    </button>
+                    <button class="btn btn-secondary" onclick="logout()" style="color: var(--danger);">
+                        🚪 Выйти
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card accent">
+                    <div class="label">Всего ответов</div>
+                    <div class="value" id="stat-total">—</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="label">Одобрено</div>
+                    <div class="value" id="stat-approved">—</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="label">На проверке</div>
+                    <div class="value" id="stat-pending">—</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="label">Отклонено</div>
+                    <div class="value" id="stat-rejected">—</div>
+                </div>
+            </div>
+            
+            <!-- Table -->
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>📋 Все ответы</h2>
+                    <span id="table-count"></span>
+                </div>
+                
+                <div id="loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Загрузка данных...</p>
+                </div>
+                
+                <div id="error" class="error" style="display: none;"></div>
+                
+                <div class="table-wrapper" id="table-wrapper" style="display: none;">
+                    <table>
+                        <thead id="table-head"></thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for answer details -->
+    <div class="modal-overlay" id="modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Ответы пользователя</h3>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Config
+        const API_URL = window.location.origin + '/api/v1';
+        
+        // State
+        let telegramId = localStorage.getItem('admin_telegram_id');
+        let facultyId = localStorage.getItem('admin_faculty_id');
+        let questionsData = [];
+        let responsesData = [];
+        
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check URL params
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('faculty_id')) {
+                facultyId = params.get('faculty_id');
+            }
+            if (params.get('telegram_id')) {
+                telegramId = params.get('telegram_id');
+            }
+            
+            if (telegramId && facultyId) {
+                showMain();
+                loadData();
+            } else {
+                showAuth();
+            }
+        });
+        
+        function showAuth() {
+            document.getElementById('auth-section').style.display = 'block';
+            document.getElementById('main-section').style.display = 'none';
+        }
+        
+        function showMain() {
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('main-section').style.display = 'block';
+            
+            // Update export link
+            document.getElementById('export-btn').href = 
+                `${API_URL}/admin/export/${facultyId}?telegram_id=${telegramId}`;
+        }
+        
+        async function login() {
+            const username = document.getElementById('username-input').value.trim();
+            const password = document.getElementById('password-input').value;
+            const errorDiv = document.getElementById('login-error');
+            const loginBtn = document.getElementById('login-btn');
+            
+            errorDiv.style.display = 'none';
+            
+            if (!username || !password) {
+                errorDiv.textContent = 'Заполните все поля';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Вход...';
+            
+            try {
+                const resp = await fetch(`${API_URL}/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await resp.json();
+                
+                if (!data.success) {
+                    errorDiv.textContent = data.error || 'Ошибка входа';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                // Успешный вход
+                telegramId = data.telegram_id;
+                facultyId = data.faculty_id;
+                
+                // Save to localStorage
+                localStorage.setItem('admin_telegram_id', telegramId);
+                localStorage.setItem('admin_faculty_id', facultyId);
+                localStorage.setItem('admin_username', username);
+                
+                showMain();
+                loadData();
+                
+            } catch (e) {
+                errorDiv.textContent = 'Ошибка соединения: ' + e.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Войти';
+            }
+        }
+        
+        // Enter key to submit
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && document.getElementById('auth-section').style.display !== 'none') {
+                login();
+            }
+        });
+        
+        function logout() {
+            localStorage.removeItem('admin_telegram_id');
+            localStorage.removeItem('admin_faculty_id');
+            localStorage.removeItem('admin_username');
+            telegramId = null;
+            facultyId = null;
+            showAuth();
+        }
+        
+        async function loadData() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const tableWrapper = document.getElementById('table-wrapper');
+            
+            loading.style.display = 'flex';
+            error.style.display = 'none';
+            tableWrapper.style.display = 'none';
+            
+            try {
+                // Load stats
+                const statsResp = await fetch(
+                    `${API_URL}/admin/stats/${facultyId}?telegram_id=${telegramId}`
+                );
+                if (!statsResp.ok) throw new Error('Ошибка загрузки статистики');
+                const stats = await statsResp.json();
+                
+                document.getElementById('faculty-name').textContent = stats.faculty_name;
+                document.getElementById('stat-total').textContent = stats.total_submissions;
+                document.getElementById('stat-approved').textContent = stats.approved_count;
+                document.getElementById('stat-pending').textContent = stats.pending_count;
+                document.getElementById('stat-rejected').textContent = stats.rejected_count;
+                
+                // Load responses
+                const respResp = await fetch(
+                    `${API_URL}/admin/responses/${facultyId}?telegram_id=${telegramId}`
+                );
+                if (!respResp.ok) throw new Error('Ошибка загрузки ответов');
+                const data = await respResp.json();
+                
+                questionsData = data.questions;
+                responsesData = data.responses;
+                
+                document.getElementById('table-count').textContent = `Всего: ${data.total}`;
+                
+                renderTable();
+                
+                loading.style.display = 'none';
+                tableWrapper.style.display = 'block';
+                
+            } catch (e) {
+                loading.style.display = 'none';
+                error.style.display = 'block';
+                error.textContent = '❌ ' + e.message;
+            }
+        }
+        
+        function renderTable() {
+            const thead = document.getElementById('table-head');
+            const tbody = document.getElementById('table-body');
+            
+            // Headers
+            let headerHtml = '<tr>';
+            headerHtml += '<th>#</th>';
+            headerHtml += '<th>Имя</th>';
+            headerHtml += '<th>Telegram ID</th>';
+            
+            // Question columns (limit to first 3 for overview)
+            const displayQuestions = questionsData.slice(0, 3);
+            displayQuestions.forEach(q => {
+                const shortText = q.text.length > 30 ? q.text.substring(0, 30) + '...' : q.text;
+                headerHtml += `<th>${shortText}</th>`;
+            });
+            
+            headerHtml += '<th>Дата</th>';
+            headerHtml += '<th>Статус</th>';
+            headerHtml += '<th></th>';
+            headerHtml += '</tr>';
+            thead.innerHTML = headerHtml;
+            
+            // Rows
+            let bodyHtml = '';
+            responsesData.forEach((resp, idx) => {
+                bodyHtml += '<tr>';
+                bodyHtml += `<td>${idx + 1}</td>`;
+                bodyHtml += `<td>${escapeHtml(resp.user_name)}</td>`;
+                bodyHtml += `<td><code>${resp.telegram_id}</code></td>`;
+                
+                // Answers (first 3)
+                displayQuestions.forEach(q => {
+                    let answer = resp.answers[q.id] || '—';
+                    if (typeof answer === 'object') answer = JSON.stringify(answer);
+                    if (answer.length > 50) answer = answer.substring(0, 50) + '...';
+                    bodyHtml += `<td>${escapeHtml(answer)}</td>`;
+                });
+                
+                // Date
+                const date = new Date(resp.submitted_at);
+                bodyHtml += `<td>${date.toLocaleDateString('ru-RU')} ${date.toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'})}</td>`;
+                
+                // Status
+                const statusClass = `status-${resp.status}`;
+                const statusText = {
+                    'submitted': 'На проверке',
+                    'approved': 'Одобрено',
+                    'rejected': 'Отклонено'
+                }[resp.status] || resp.status;
+                bodyHtml += `<td><span class="status-badge ${statusClass}">${statusText}</span></td>`;
+                
+                // View button
+                bodyHtml += `<td><button class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="showDetails(${idx})">👁 Подробнее</button></td>`;
+                
+                bodyHtml += '</tr>';
+            });
+            
+            tbody.innerHTML = bodyHtml;
+        }
+        
+        function showDetails(idx) {
+            const resp = responsesData[idx];
+            
+            document.getElementById('modal-title').textContent = 
+                `Ответы: ${resp.user_name}`;
+            
+            let html = '';
+            questionsData.forEach(q => {
+                let answer = resp.answers[q.id] || '—';
+                if (typeof answer === 'object') {
+                    if (Array.isArray(answer)) {
+                        answer = answer.join(', ');
+                    } else {
+                        answer = JSON.stringify(answer, null, 2);
+                    }
+                }
+                
+                html += `
+                    <div class="answer-item">
+                        <div class="question">${escapeHtml(q.text)}</div>
+                        <div class="answer">${escapeHtml(answer)}</div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('modal-body').innerHTML = html;
+            document.getElementById('modal').classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+        
+        // Close modal on overlay click
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target.id === 'modal') closeModal();
+        });
+        
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

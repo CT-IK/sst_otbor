@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.core.redis import redis_client
-from app.api.routers import questionnaire
+from app.api.routers import questionnaire, admin_stats
 from config import settings
 
 # Логирование
@@ -53,6 +53,7 @@ app.add_middleware(
 
 # Роутеры
 app.include_router(questionnaire.router, prefix="/api/v1", tags=["Questionnaire"])
+app.include_router(admin_stats.router, prefix="/api/v1", tags=["Admin Stats"])
 
 # Раздача фронтенда
 # В dev: напрямую из FastAPI
@@ -66,6 +67,11 @@ if frontend_path.exists():
     async def serve_frontend():
         """Главная страница — Mini App"""
         return FileResponse(frontend_path / "index.html")
+    
+    @app.get("/admin")
+    async def serve_admin():
+        """Админ панель — таблица ответов"""
+        return FileResponse(frontend_path / "admin.html")
 
 
 @app.get("/healthz")
