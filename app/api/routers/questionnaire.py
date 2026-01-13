@@ -167,7 +167,7 @@ async def get_questionnaire_form(
     )
     existing_questionnaire = result.scalars().first()
     already_submitted = existing_questionnaire is not None
-    submitted_at = existing_questionnaire.created_at if existing_questionnaire else None
+    submitted_at = existing_questionnaire.submitted_at if existing_questionnaire else None
     
     # Проверяем статус этапа
     can_submit = (

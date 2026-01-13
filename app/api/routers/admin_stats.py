@@ -197,12 +197,12 @@ async def get_faculty_stats(
     fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
     result = await db.execute(
         select(
-            func.date(Questionnaire.created_at).label('date'),
+            func.date(Questionnaire.submitted_at).label('date'),
             func.count(Questionnaire.id).label('count')
         ).where(
             Questionnaire.faculty_id == faculty_id,
-            Questionnaire.created_at >= fourteen_days_ago
-        ).group_by(func.date(Questionnaire.created_at)).order_by('date')
+            Questionnaire.submitted_at >= fourteen_days_ago
+        ).group_by(func.date(Questionnaire.submitted_at)).order_by('date')
     )
     daily_data = result.all()
     
@@ -265,7 +265,7 @@ async def get_faculty_responses(
             User, Questionnaire.user_id == User.id
         ).where(
             Questionnaire.faculty_id == faculty_id
-        ).order_by(Questionnaire.created_at.desc())
+        ).order_by(Questionnaire.submitted_at.desc())
     )
     rows = result.all()
     
