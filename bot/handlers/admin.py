@@ -136,18 +136,14 @@ async def callback_stages(callback: CallbackQuery):
         return
     
     # Сразу показываем этапы своего факультета
-    callback.data = f"stages:faculty:{faculty_id}"
-    await callback_faculty_stages(callback)
+    await _show_faculty_stages(callback, faculty_id)
 
 
-@admin_router.callback_query(F.data.startswith("stages:faculty:"))
-async def callback_faculty_stages(callback: CallbackQuery):
-    """Управление этапами конкретного факультета"""
+async def _show_faculty_stages(callback: CallbackQuery, faculty_id: int):
+    """Внутренняя функция для показа этапов факультета"""
     if not await is_admin(callback.from_user.id):
         await callback.answer("Нет доступа", show_alert=True)
         return
-    
-    faculty_id = int(callback.data.split(":")[2])
     
     # Проверяем, что админ имеет доступ к этому факультету
     admin_faculty_id = await get_admin_faculty_id(callback.from_user.id)
@@ -199,6 +195,13 @@ async def callback_faculty_stages(callback: CallbackQuery):
     await callback.answer()
 
 
+@admin_router.callback_query(F.data.startswith("stages:faculty:"))
+async def callback_faculty_stages(callback: CallbackQuery):
+    """Управление этапами конкретного факультета"""
+    faculty_id = int(callback.data.split(":")[2])
+    await _show_faculty_stages(callback, faculty_id)
+
+
 @admin_router.callback_query(F.data.startswith("stages:set:"))
 async def callback_set_stage(callback: CallbackQuery):
     """Установить этап"""
@@ -239,7 +242,7 @@ async def callback_set_stage(callback: CallbackQuery):
     await callback.answer(f"✅ Этап изменён: {stage_type} ({stage_status})", show_alert=True)
     
     # Обновляем сообщение
-    await callback_faculty_stages(callback)
+    await _show_faculty_stages(callback, faculty_id)
 
 
 @admin_router.callback_query(F.data == "admin:back")
