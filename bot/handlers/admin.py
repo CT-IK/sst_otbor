@@ -230,6 +230,10 @@ async def callback_set_stage(callback: CallbackQuery):
         faculty.current_stage = StageType(stage_type)
         faculty.stage_status = StageStatus(stage_status)
         
+        # При переходе на этап HOME_VIDEO автоматически открываем приём видео
+        if StageType(stage_type) == StageType.HOME_VIDEO and StageStatus(stage_status) == StageStatus.OPEN:
+            faculty.video_submission_open = True
+        
         await db.commit()
     
     await callback.answer(f"✅ Этап изменён: {stage_type} ({stage_status})", show_alert=True)

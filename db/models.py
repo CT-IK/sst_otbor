@@ -57,8 +57,22 @@ class User(Base):
     approvals = relationship("ApprovalQueue", back_populates="user", cascade="all, delete-orphan")
 
 
+class AdminRole(str, Enum):
+    """Роли администраторов"""
+    HEAD_ADMIN = "head_admin"      # Главный админ факультета (назначает суперадмин)
+    REVIEWER = "reviewer"          # Проверяющий (назначает главный админ)
+
+
 class Administrator(Base):
-    """Администратор факультета для управления шаблонами и проверки ответов"""
+    """
+    Администратор факультета.
+    
+    Роли:
+    - head_admin: Главный админ факультета (назначается суперадмином)
+      Может: добавлять проверяющих, делать рассылки, редактировать вопросы, всё остальное
+    - reviewer: Проверяющий (назначается главным админом)
+      Может: смотреть ответы, статистику, проводить собесы
+    """
     __tablename__ = "administrators"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -68,9 +82,10 @@ class Administrator(Base):
     email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)  # Для веб-интерфейса
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Для веб-интерфейса
     faculty_id: Mapped[int | None] = mapped_column(ForeignKey("faculty.id", ondelete="RESTRICT"), nullable=True)
-    role: Mapped[str] = mapped_column(String(30), default="faculty_admin")  # faculty_admin, super_admin
+    role: Mapped[str] = mapped_column(String(30), default="reviewer")  # head_admin, reviewer
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    added_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # Кто добавил (telegram_id)
 
     faculty = relationship("Faculty", back_populates="administrators", lazy="joined")
 
@@ -95,6 +110,10 @@ class Faculty(Base):
     )
     stage_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     stage_closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Настройки для этапа домашнего видео
+    video_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # ID группового чата для видео
+    video_submission_open: Mapped[bool] = mapped_column(Boolean, default=False)  # Открыт ли приём видео
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

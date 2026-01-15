@@ -581,6 +581,7 @@ async def confirm_add_admin(callback: CallbackQuery, state: FSMContext, bot: Bot
             admin = result.scalars().first()
             admin.is_active = True
             admin.faculty_id = data["admin_faculty_id"]
+            admin.role = "head_admin"  # Суперадмин назначает главных админов
             admin.password_hash = password_hash  # Обновляем пароль
         else:
             # Создаём нового
@@ -589,7 +590,7 @@ async def confirm_add_admin(callback: CallbackQuery, state: FSMContext, bot: Bot
                 full_name=data.get("admin_full_name"),
                 username=admin_username,
                 faculty_id=data["admin_faculty_id"],
-                role="faculty_admin",
+                role="head_admin",  # Суперадмин назначает главных админов
                 is_active=True,
                 password_hash=password_hash,
             )
@@ -603,16 +604,18 @@ async def confirm_add_admin(callback: CallbackQuery, state: FSMContext, bot: Bot
     try:
         await bot.send_message(
             admin_telegram_id,
-            f"🎉 <b>Вы назначены администратором!</b>\n\n"
+            f"🎉 <b>Вы назначены ГЛАВНЫМ администратором!</b>\n\n"
             f"Факультет: <b>{faculty_name}</b>\n\n"
             f"📊 <b>Данные для входа в админ-панель:</b>\n"
             f"Логин: <code>{admin_username or admin_telegram_id}</code>\n"
             f"Пароль: <code>{password}</code>\n\n"
-            f"🔗 Админ-панель: putevod-ik.ru/admin\n\n"
+            f"🔗 Админ-панель: https://putevod-ik.ru/admin\n\n"
             f"<i>Сохраните пароль! Он больше не будет показан.</i>\n\n"
-            f"Также доступно:\n"
-            f"• /admin — управление в боте\n"
-            f"• /questions — редактор вопросов"
+            f"<b>Ваши возможности:</b>\n"
+            f"• /admin — управление факультетом\n"
+            f"• /questions — редактор вопросов\n"
+            f"• /reviewers — управление проверяющими\n"
+            f"• /broadcast — рассылка участникам"
         )
         password_sent = True
     except Exception as e:

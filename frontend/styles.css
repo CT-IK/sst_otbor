@@ -558,9 +558,7 @@ body {
     position: relative;
     min-height: 4px;
     transition: height 0.3s ease;
-}
-
-.chart-value {
+}.chart-value {
     position: absolute;
     top: -20px;
     left: 50%;

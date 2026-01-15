@@ -9,6 +9,7 @@ alembic>=1.17.0
 
 # Redis
 redis>=5.0.0
+aioredis>=2.0.0
 
 # Telegram Bot
 aiogram>=3.0.0
@@ -17,6 +18,12 @@ aiohttp>=3.9.0
 # Settings & validation
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
+
+# File uploads
+python-multipart>=0.0.6
+
+# Environment variables
+python-dotenv>=1.0.0
 
 # Utils
 python-dotenv>=1.0.0
