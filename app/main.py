@@ -20,6 +20,20 @@ app.include_router(questionnaire.router)
 app.include_router(admin_stats.router)
 
 
+@app.get("/")
+async def root():
+    return {
+        "message": "SST Selection Backend API",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/healthz",
+            "questionnaire": "/questionnaire/{faculty_id}",
+            "admin": "/admin/stats/{faculty_id}",
+            "docs": "/docs"
+        }
+    }
+
+
 @app.get("/healthz")
 async def health():
     return {"status": "ok"}
