@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -5,9 +6,21 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 
 from app.core.config import settings
+from app.core.redis import redis_client
 from app.api.routers import questionnaire, admin_stats
 
-app = FastAPI(title="Backend for winter app")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Управление жизненным циклом приложения"""
+    # Startup
+    await redis_client.connect()
+    yield
+    # Shutdown
+    await redis_client.disconnect()
+
+
+app = FastAPI(title="Backend for winter app", lifespan=lifespan)
 
 # Путь к фронтенду
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
