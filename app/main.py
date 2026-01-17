@@ -22,8 +22,8 @@ app.add_middleware(
 )
 
 # Подключаем роутеры (API имеет приоритет над статикой)
-app.include_router(questionnaire.router)
-app.include_router(admin_stats.router)
+app.include_router(questionnaire.router, prefix="/api/v1")
+app.include_router(admin_stats.router, prefix="/api/v1")
 
 # Раздаём статику (CSS, JS) - ДО HTML роутов
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
