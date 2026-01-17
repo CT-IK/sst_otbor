@@ -52,6 +52,12 @@ async def get_admin_faculty_id(telegram_id: int) -> Optional[int]:
     return admin.faculty_id if admin else None
 
 
+async def is_head_admin(telegram_id: int) -> bool:
+    """Проверить, является ли пользователь главным администратором"""
+    admin = await get_admin(telegram_id)
+    return admin is not None and admin.role == "head_admin"
+
+
 # === Команды ===
 
 @admin_router.message(Command("admin"))
@@ -61,12 +67,18 @@ async def cmd_admin(message: Message):
         await message.answer("⛔ У вас нет прав администратора")
         return
     
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    buttons = [
         [InlineKeyboardButton(text="📝 Вопросы", callback_data="admin:questions")],
         [InlineKeyboardButton(text="🎯 Этапы отбора", callback_data="admin:stages")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="admin:stats")],
         [InlineKeyboardButton(text="👥 Заявки на проверку", callback_data="admin:approvals")],
-    ])
+    ]
+    
+    # Добавляем кнопку управления видео только для head_admin
+    if await is_head_admin(message.from_user.id):
+        buttons.append([InlineKeyboardButton(text="🎬 Управление видео", callback_data="admin:video")])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     
     await message.answer(
         "🔧 <b>Панель администратора</b>\n\n"
@@ -269,6 +281,125 @@ async def callback_set_stage(callback: CallbackQuery):
     
     # Обновляем сообщение
     await _show_faculty_stages(callback, faculty_id)
+
+
+@admin_router.callback_query(F.data == "admin:video")
+async def callback_video_management(callback: CallbackQuery):
+    """Управление видео-этапом"""
+    if not await is_head_admin(callback.from_user.id):
+        await callback.answer("Эта функция доступна только главным администраторам", show_alert=True)
+        return
+    
+    async with async_session_maker() as db:
+        admin = await get_admin(callback.from_user.id)
+        if not admin:
+            await callback.answer("Администратор не найден", show_alert=True)
+            return
+        
+        result = await db.execute(select(Faculty).where(Faculty.id == admin.faculty_id))
+        faculty = result.scalars().first()
+        
+        if not faculty:
+            await callback.answer("Факультет не найден", show_alert=True)
+            return
+        
+        # Проверяем статус этапа
+        is_video_stage = faculty.current_stage == StageType.HOME_VIDEO
+        video_chat_configured = faculty.video_chat_id is not None
+        video_submission_open = faculty.video_submission_open
+        
+        text = f"🎬 <b>Управление видео-этапом</b>\n\n"
+        text += f"Факультет: <b>{faculty.name}</b>\n\n"
+        
+        if is_video_stage:
+            text += f"✅ Этап активен: <b>Домашнее видео</b>\n"
+            text += f"📊 Статус приёма: <b>{'Открыт' if video_submission_open else 'Закрыт'}</b>\n"
+            if video_chat_configured:
+                text += f"💬 Чат настроен: <code>{faculty.video_chat_id}</code>\n"
+            else:
+                text += f"⚠️ Чат не настроен\n"
+        else:
+            text += f"❌ Этап не активен\n"
+            text += f"Текущий этап: <b>{faculty.current_stage.value if faculty.current_stage else 'не начат'}</b>\n"
+        
+        buttons = []
+        
+        if is_video_stage:
+            if not video_chat_configured:
+                buttons.append([InlineKeyboardButton(
+                    text="⚙️ Настроить чат (/video_chat)",
+                    callback_data="admin:video:info_chat"
+                )])
+            else:
+                buttons.append([InlineKeyboardButton(
+                    text="⚙️ Изменить чат (/video_chat)",
+                    callback_data="admin:video:info_chat"
+                )])
+            
+            buttons.append([InlineKeyboardButton(
+                text=f"{'🔒 Закрыть' if video_submission_open else '✅ Открыть'} приём видео (/video_toggle)",
+                callback_data="admin:video:info_toggle"
+            )])
+            
+            buttons.append([InlineKeyboardButton(
+                text="📤 Разослать запрос (/send_video_request)",
+                callback_data="admin:video:info_send"
+            )])
+        else:
+            text += f"\n<i>Сначала откройте этап «Домашнее видео» в разделе «Этапы отбора»</i>"
+        
+        buttons.append([InlineKeyboardButton(text="« Назад", callback_data="admin:back")])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        )
+        await callback.answer()
+
+
+@admin_router.callback_query(F.data.startswith("admin:video:info_"))
+async def callback_video_info(callback: CallbackQuery):
+    """Показать информацию о команде для видео"""
+    action = callback.data.split(":")[2]
+    
+    info_texts = {
+        "chat": (
+            "⚙️ <b>Настройка чата для видео</b>\n\n"
+            "Используйте команду: <code>/video_chat</code>\n\n"
+            "Как настроить:\n"
+            "1. Добавьте бота в групповой чат\n"
+            "2. Дайте боту права администратора\n"
+            "3. Отправьте команду <code>/get_chat_id</code> в чате\n"
+            "4. Перешлите любое сообщение из чата боту или введите ID\n\n"
+            "Или используйте команду <code>/video_chat</code> для пошаговой настройки."
+        ),
+        "toggle": (
+            "🔒 <b>Открыть/закрыть приём видео</b>\n\n"
+            "Используйте команду: <code>/video_toggle</code>\n\n"
+            "Эта команда переключает статус приёма видео:\n"
+            "• Открыт — пользователи могут отправлять видео\n"
+            "• Закрыт — приём видео временно приостановлен"
+        ),
+        "send": (
+            "📤 <b>Рассылка запроса на загрузку видео</b>\n\n"
+            "Используйте команду: <code>/send_video_request</code>\n\n"
+            "Эта команда разошлёт всем пользователям, которые отправили анкету, сообщение с кнопкой «📹 Загрузить видео».\n\n"
+            "<b>Требования:</b>\n"
+            "• Этап «Домашнее видео» должен быть открыт\n"
+            "• Групповой чат должен быть настроен\n"
+            "• Должны быть пользователи, отправившие анкету"
+        )
+    }
+    
+    text = info_texts.get(action, "Информация недоступна")
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="« Назад к управлению видео", callback_data="admin:video")]
+        ])
+    )
+    await callback.answer()
 
 
 @admin_router.callback_query(F.data == "admin:back")
