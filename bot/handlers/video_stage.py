@@ -270,11 +270,11 @@ async def cmd_send_video_request(message: Message):
         # Получаем пользователей, которые отправили анкету
         result = await db.execute(
             select(User.telegram_id, User.first_name, User.surname)
-            .join(UserProgress, User.telegram_id == UserProgress.telegram_id)
+            .join(UserProgress, User.id == UserProgress.user_id)
             .where(
                 User.faculty_id == admin.faculty_id,
                 UserProgress.stage_type == StageType.QUESTIONNAIRE,
-                UserProgress.submission_status == SubmissionStatus.SUBMITTED
+                UserProgress.status == SubmissionStatus.SUBMITTED
             )
         )
         users = result.fetchall()
@@ -396,7 +396,7 @@ async def handle_video_submission(message: Message, bot: Bot):
         )
         existing_progress = result.scalars().first()
         
-        if existing_progress and existing_progress.submission_status == SubmissionStatus.SUBMITTED:
+        if existing_progress and existing_progress.status == SubmissionStatus.SUBMITTED:
             await message.answer("⚠️ Вы уже отправили видео. Повторная отправка невозможна.")
             return
         

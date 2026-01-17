@@ -2,6 +2,7 @@
 Команды администратора факультета.
 """
 from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select, func
@@ -179,20 +180,32 @@ async def _show_faculty_stages(callback: CallbackQuery, faculty_id: int):
             callback_data=f"stages:set:{faculty_id}:home_video:open"
         )],
         [InlineKeyboardButton(
+            text="🔒 Закрыть домашку",
+            callback_data=f"stages:set:{faculty_id}:home_video:closed"
+        )],
+        [InlineKeyboardButton(
             text="🎤 Открыть собесы",
             callback_data=f"stages:set:{faculty_id}:interview:open"
         )],
         [InlineKeyboardButton(text="« Назад", callback_data="admin:stages")],
     ]
     
-    await callback.message.edit_text(
-        f"🎯 <b>{faculty.name}</b>\n\n"
-        f"Текущий этап: <b>{current_stage}</b>\n"
-        f"Статус: <b>{current_status}</b>\n\n"
-        f"Выберите действие:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
-    )
-    await callback.answer()
+    try:
+        await callback.message.edit_text(
+            f"🎯 <b>{faculty.name}</b>\n\n"
+            f"Текущий этап: <b>{current_stage}</b>\n"
+            f"Статус: <b>{current_status}</b>\n\n"
+            f"Выберите действие:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        )
+    except TelegramBadRequest as e:
+        # Сообщение не изменилось - это нормально, просто подтверждаем действие
+        if "message is not modified" in str(e).lower():
+            await callback.answer()
+        else:
+            raise
+    else:
+        await callback.answer()
 
 
 @admin_router.callback_query(F.data.startswith("stages:faculty:"))
@@ -229,13 +242,25 @@ async def callback_set_stage(callback: CallbackQuery):
             await callback.answer("Факультет не найден", show_alert=True)
             return
         
+        new_stage = StageType(stage_type)
+        new_status = StageStatus(stage_status)
+        
+        # Если открываем новый этап (не тот, что был), закрываем предыдущий
+        if new_status == StageStatus.OPEN and faculty.current_stage != new_stage:
+            # Предыдущий этап автоматически закрывается при переходе на новый
+            # (можно добавить логику сохранения истории, если нужно)
+            pass
+        
         # Обновляем этап
-        faculty.current_stage = StageType(stage_type)
-        faculty.stage_status = StageStatus(stage_status)
+        faculty.current_stage = new_stage
+        faculty.stage_status = new_status
         
         # При переходе на этап HOME_VIDEO автоматически открываем приём видео
-        if StageType(stage_type) == StageType.HOME_VIDEO and StageStatus(stage_status) == StageStatus.OPEN:
+        if new_stage == StageType.HOME_VIDEO and new_status == StageStatus.OPEN:
             faculty.video_submission_open = True
+        # При закрытии HOME_VIDEO закрываем приём видео
+        elif new_stage == StageType.HOME_VIDEO and new_status == StageStatus.CLOSED:
+            faculty.video_submission_open = False
         
         await db.commit()
     
