@@ -169,9 +169,24 @@ async def get_questionnaire_form(
     already_submitted = existing_questionnaire is not None
     submitted_at = existing_questionnaire.submitted_at if existing_questionnaire else None
     
-    # Проверяем статус этапа
+    # Проверяем текущий этап факультета
+    current_stage = faculty.current_stage
+    
+    # Если этап HOME_VIDEO, возвращаем специальный ответ
+    if current_stage == StageType.HOME_VIDEO:
+        return DraftWithTemplateResponse(
+            template=template_to_response(faculty, template),
+            draft=None,
+            stage_status=faculty.stage_status.value if faculty.stage_status else "not_started",
+            can_submit=False,
+            already_submitted=already_submitted,
+            submitted_at=submitted_at,
+            current_stage="home_video",  # Указываем, что нужно показать сообщение о видео
+        )
+    
+    # Проверяем статус этапа для анкеты
     can_submit = (
-        faculty.current_stage == StageType.QUESTIONNAIRE and
+        current_stage == StageType.QUESTIONNAIRE and
         faculty.stage_status == StageStatus.OPEN and
         not already_submitted  # Нельзя отправить повторно!
     )
@@ -198,6 +213,7 @@ async def get_questionnaire_form(
         can_submit=can_submit,
         already_submitted=already_submitted,
         submitted_at=submitted_at,
+        current_stage=current_stage.value if current_stage else "not_started",
     )
 
 

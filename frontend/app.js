@@ -199,6 +199,12 @@ async function loadQuestionnaire() {
             return;
         }
         
+        // Проверяем текущий этап
+        if (data.current_stage === 'home_video') {
+            showVideoStage();
+            return;
+        }
+        
         // Проверяем статус этапа
         if (data.stage_status === 'not_started') {
             showStageClosed();
@@ -703,11 +709,11 @@ function validateForm() {
 // === UI хелперы ===
 function showScreen(screenId) {
     // Скрываем все экраны
-    elements.loading.classList.add('hidden');
-    elements.error.classList.add('hidden');
-    elements.stageClosed.classList.add('hidden');
-    elements.alreadySubmitted.classList.add('hidden');
-    elements.questionnaire.classList.add('hidden');
+    const allScreens = ['loading', 'error', 'stage-closed', 'already-submitted', 'questionnaire', 'video-stage', 'admin-stats', 'no-faculty'];
+    allScreens.forEach(id => {
+        const screen = document.getElementById(id);
+        if (screen) screen.classList.add('hidden');
+    });
     
     // Показываем нужный
     const screen = document.getElementById(screenId);
@@ -728,6 +734,11 @@ function showNoFacultyError() {
 
 function showStageClosed() {
     showScreen('stage-closed');
+    if (tg) tg.MainButton.hide();
+}
+
+function showVideoStage() {
+    showScreen('video-stage');
     if (tg) tg.MainButton.hide();
 }
 

@@ -198,14 +198,15 @@ async def _show_faculty_stages(callback: CallbackQuery, faculty_id: int):
             f"Выберите действие:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
+        await callback.answer()
     except TelegramBadRequest as e:
         # Сообщение не изменилось - это нормально, просто подтверждаем действие
-        if "message is not modified" in str(e).lower():
+        error_msg = str(e).lower()
+        if "message is not modified" in error_msg or "not modified" in error_msg:
             await callback.answer()
         else:
+            # Другая ошибка - пробрасываем дальше
             raise
-    else:
-        await callback.answer()
 
 
 @admin_router.callback_query(F.data.startswith("stages:faculty:"))
