@@ -608,6 +608,35 @@
             }
         }
         
+        // Форматирование ответа для отображения
+        function formatAnswer(question, answerValue) {
+            if (answerValue === null || answerValue === undefined || answerValue === '') {
+                return '—';
+            }
+            
+            // Для вопросов с выбором (choice, multiple_choice)
+            if ((question.type === 'choice' || question.type === 'multiple_choice') && question.options) {
+                if (Array.isArray(answerValue)) {
+                    // Множественный выбор
+                    return answerValue.map(val => {
+                        const option = question.options.find(opt => opt.value === val);
+                        return option ? option.label : val;
+                    }).join(', ');
+                } else {
+                    // Одиночный выбор
+                    const option = question.options.find(opt => opt.value === answerValue);
+                    return option ? option.label : answerValue;
+                }
+            }
+            
+            // Для остальных типов - просто показываем значение
+            if (typeof answerValue === 'object') {
+                return JSON.stringify(answerValue);
+            }
+            
+            return String(answerValue);
+        }
+        
         function renderTable() {
             const thead = document.getElementById('table-head');
             const tbody = document.getElementById('table-body');
@@ -622,7 +651,7 @@
             const displayQuestions = questionsData.slice(0, 3);
             displayQuestions.forEach(q => {
                 const shortText = q.text.length > 30 ? q.text.substring(0, 30) + '...' : q.text;
-                headerHtml += `<th>${shortText}</th>`;
+                headerHtml += `<th>${escapeHtml(shortText)}</th>`;
             });
             
             headerHtml += '<th>Дата</th>';
@@ -641,8 +670,8 @@
                 
                 // Answers (first 3)
                 displayQuestions.forEach(q => {
-                    let answer = resp.answers[q.id] || '—';
-                    if (typeof answer === 'object') answer = JSON.stringify(answer);
+                    const answerValue = resp.answers[q.id];
+                    let answer = formatAnswer(q, answerValue);
                     if (answer.length > 50) answer = answer.substring(0, 50) + '...';
                     bodyHtml += `<td>${escapeHtml(answer)}</td>`;
                 });
@@ -677,14 +706,8 @@
             
             let html = '';
             questionsData.forEach(q => {
-                let answer = resp.answers[q.id] || '—';
-                if (typeof answer === 'object') {
-                    if (Array.isArray(answer)) {
-                        answer = answer.join(', ');
-                    } else {
-                        answer = JSON.stringify(answer, null, 2);
-                    }
-                }
+                const answerValue = resp.answers[q.id];
+                const answer = formatAnswer(q, answerValue);
                 
                 html += `
                     <div class="answer-item">

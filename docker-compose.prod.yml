@@ -19,6 +19,10 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - internal
+    ports:
+      # Раскомментируйте для доступа снаружи (небезопасно для продакшена!)
+      - "127.0.0.1:5432:5432"  # Доступ только с localhost сервера
+      - "5432:5432"  # Доступ со всех интерфейсов (НЕ рекомендуется!)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sst_user} -d ${POSTGRES_DB:-sst_db}"]
       interval: 10s

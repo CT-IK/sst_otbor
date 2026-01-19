@@ -336,6 +336,9 @@ async def export_faculty_responses_csv(
     writer = csv.writer(output)
     writer.writerow(headers)
     
+    # Создаём map вопросов для быстрого доступа
+    question_map = {q['id']: q for q in data.questions}
+    
     # Данные
     for resp in data.responses:
         row = [
@@ -345,10 +348,12 @@ async def export_faculty_responses_csv(
         ]
         # Ответы на вопросы
         for qid in question_ids:
-            answer = resp.answers.get(qid, '')
-            if isinstance(answer, list):
-                answer = ', '.join(str(a) for a in answer)
-            row.append(str(answer))
+            question = question_map.get(qid, {})
+            answer_value = resp.answers.get(qid, '')
+            
+            # Форматируем ответ для читаемости
+            answer = format_answer_for_export(question, answer_value)
+            row.append(answer)
         
         row.extend([
             resp.submitted_at.strftime('%d.%m.%Y %H:%M'),
@@ -409,6 +414,34 @@ def generate_password(length: int = 12) -> str:
     """Генерация случайного пароля"""
     alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
+def format_answer_for_export(question: dict, answer_value: Any) -> str:
+    """Форматировать ответ для экспорта (читаемый формат)"""
+    if answer_value is None or answer_value == '':
+        return ''
+    
+    # Для вопросов с выбором (choice, multiple_choice)
+    question_type = question.get('type', '')
+    options = question.get('options', [])
+    
+    if question_type in ('choice', 'multiple_choice') and options:
+        # Создаём map для быстрого поиска
+        option_map = {opt.get('value'): opt.get('label', opt.get('value')) for opt in options}
+        
+        if isinstance(answer_value, list):
+            # Множественный выбор
+            labels = [option_map.get(val, val) for val in answer_value]
+            return ', '.join(str(label) for label in labels)
+        else:
+            # Одиночный выбор
+            return option_map.get(str(answer_value), str(answer_value))
+    
+    # Для остальных типов - просто строковое представление
+    if isinstance(answer_value, (list, dict)):
+        return str(answer_value)
+    
+    return str(answer_value)
 
 
 @router.post("/login", response_model=AdminLoginResponse)
