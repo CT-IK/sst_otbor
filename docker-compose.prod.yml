@@ -22,6 +22,7 @@ services:
     ports:
       # Проброс порта для доступа с сервера (через SSH туннель)
       - "127.0.0.1:5432:5432"  # Доступ только с localhost сервера
+    command: postgres -c listen_addresses='*'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sst_user} -d ${POSTGRES_DB:-sst_db}"]
       interval: 10s
@@ -43,6 +44,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # pgAdmin - веб-интерфейс для управления PostgreSQL
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sst_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@sst.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: "False"  # Одиночный режим (без сервера)
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"  # Отключаем требование мастер-пароля
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - internal
+      - infra_network  # Для доступа через nginx
+    expose:
+      - "80"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # FastAPI Backend + Mini App
   backend:
@@ -96,3 +118,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  pgadmin_data:
