@@ -59,9 +59,8 @@ services:
       - pgadmin_data:/var/lib/pgadmin
     networks:
       - internal
-      - infra_network  # Для доступа через nginx
-    expose:
-      - "80"
+    ports:
+      - "5050:80"  # Доступ через http://IP_сервера:5050
     depends_on:
       postgres:
         condition: service_healthy
