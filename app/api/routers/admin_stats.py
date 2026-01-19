@@ -389,19 +389,20 @@ async def check_admin_access(
     Они должны быть добавлены в таблицу Administrator для доступа.
     """
     # Проверяем только реальных админов из таблицы (без автоматического доступа суперадминов)
+    # Получаем только нужные поля напрямую, чтобы избежать проблем с lazy loading
     result = await db.execute(
-        select(Administrator).where(
+        select(Administrator.role).where(
             Administrator.telegram_id == telegram_id,
             Administrator.faculty_id == faculty_id,
             Administrator.is_active == True
         )
     )
-    admin = result.scalars().first()
+    role = result.scalar_one_or_none()
     
-    if admin:
+    if role:
         return {
             "is_admin": True,
-            "role": admin.role,
+            "role": role,
             "faculty_id": faculty_id,
         }
     else:
