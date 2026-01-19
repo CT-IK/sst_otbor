@@ -368,6 +368,9 @@ async def submit_questionnaire(
         )
         db.add(progress)
     
+    # Сохраняем имя факультета до commit (чтобы избежать lazy loading после commit)
+    faculty_name = faculty.name
+    
     await db.commit()
     await db.refresh(questionnaire)
     
@@ -378,7 +381,7 @@ async def submit_questionnaire(
     # Отправляем уведомление в Telegram
     await notification_service.notify_questionnaire_submitted(
         telegram_id=telegram_id,
-        faculty_name=faculty.name
+        faculty_name=faculty_name
     )
     
     return SubmitQuestionnaireResponse(
