@@ -384,15 +384,27 @@ async def check_admin_access(
     """
     Проверить, является ли пользователь админом факультета.
     Используется Mini App для определения режима (user/admin).
+    
+    Примечание: Суперадмины НЕ получают автоматический доступ к админ-панели Mini App.
+    Они должны быть добавлены в таблицу Administrator для доступа.
     """
-    try:
-        admin = await verify_faculty_admin(faculty_id, telegram_id, db)
+    # Проверяем только реальных админов из таблицы (без автоматического доступа суперадминов)
+    result = await db.execute(
+        select(Administrator).where(
+            Administrator.telegram_id == telegram_id,
+            Administrator.faculty_id == faculty_id,
+            Administrator.is_active == True
+        )
+    )
+    admin = result.scalars().first()
+    
+    if admin:
         return {
             "is_admin": True,
             "role": admin.role,
             "faculty_id": faculty_id,
         }
-    except HTTPException:
+    else:
         return {
             "is_admin": False,
             "role": None,
