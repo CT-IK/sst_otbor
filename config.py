@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 from typing import Literal
 
 
@@ -6,11 +7,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", 
         env_file_encoding="utf-8",
-        extra="ignore"  # Игнорировать лишние переменные из .env
+        extra="ignore",  # Игнорировать лишние переменные из .env
+        case_sensitive=False  # Читать ENV и env как одно и то же
     )
 
-    env: Literal["prod", "dev", "test"] = "dev"
-    debug: bool = True
+    env: Literal["prod", "dev", "test"] = Field(default="dev", validation_alias="ENV")
+    debug: bool = Field(default=True, validation_alias="DEBUG")
 
     # PostgreSQL (можно задать напрямую через DB_URL или через отдельные переменные)
     db_url: str | None = None

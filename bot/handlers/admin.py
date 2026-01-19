@@ -34,10 +34,7 @@ async def get_admin(telegram_id: int) -> Optional[Administrator]:
 
 async def is_admin(telegram_id: int) -> bool:
     """Проверить, является ли пользователь администратором"""
-    # В dev режиме — все админы
-    if settings.is_dev:
-        return True
-    
+    # Проверяем реальные права в БД
     admin = await get_admin(telegram_id)
     return admin is not None
 
