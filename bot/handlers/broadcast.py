@@ -68,9 +68,9 @@ async def cmd_broadcast(message: Message, state: FSMContext):
         
         # Статистика по статусам
         result = await db.execute(
-            select(UserProgress.submission_status, func.count(UserProgress.id))
+            select(UserProgress.status, func.count(UserProgress.id))
             .where(UserProgress.faculty_id == admin.faculty_id)
-            .group_by(UserProgress.submission_status)
+            .group_by(UserProgress.status)
         )
         status_counts = dict(result.fetchall())
     
@@ -231,10 +231,10 @@ async def callback_send_broadcast(callback: CallbackQuery, state: FSMContext, bo
             # Фильтрованная рассылка - берём из UserProgress
             result = await db.execute(
                 select(User.telegram_id)
-                .join(UserProgress, User.telegram_id == UserProgress.telegram_id)
+                .join(UserProgress, User.id == UserProgress.user_id)
                 .where(
                     UserProgress.faculty_id == data['faculty_id'],
-                    UserProgress.submission_status == filter_type
+                    UserProgress.status == filter_type
                 )
             )
         else:
@@ -325,7 +325,7 @@ async def callback_broadcast_filter_select(callback: CallbackQuery, state: FSMCo
             result = await db.execute(
                 select(func.count(UserProgress.id)).where(
                     UserProgress.faculty_id == admin.faculty_id,
-                    UserProgress.submission_status == filter_type
+                    UserProgress.status == filter_type
                 )
             )
             user_count = result.scalar() or 0

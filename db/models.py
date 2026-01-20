@@ -11,6 +11,7 @@ from sqlalchemy import (
     Text,
     BigInteger,
     Enum as SQLEnum,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -88,6 +89,7 @@ class Administrator(Base):
     added_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # Кто добавил (telegram_id)
 
     faculty = relationship("Faculty", back_populates="administrators", lazy="joined")
+    slot_availability = relationship("SlotAvailability", back_populates="interviewer", cascade="all, delete-orphan")
 
 
 class Faculty(Base):
@@ -200,11 +202,13 @@ class InterviewSlot(Base):
     max_participants: Mapped[int] = mapped_column(Integer, default=1)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Аудитория/ссылка
     created_by: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # Активен ли слот (можно деактивировать)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     faculty = relationship("Faculty")
     creator = relationship("Administrator")
     interviews = relationship("Interview", back_populates="slot")
+    available_interviewers = relationship("SlotAvailability", back_populates="slot", cascade="all, delete-orphan")
 
 
 class InterviewStatus(str, Enum):
@@ -223,6 +227,7 @@ class Interview(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
     slot_id: Mapped[int | None] = mapped_column(ForeignKey("interview_slots.id", ondelete="SET NULL"), nullable=True)
+    interviewer_id: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)  # Назначенный проверяющий
     status: Mapped[InterviewStatus] = mapped_column(
         SQLEnum(InterviewStatus), 
         default=InterviewStatus.SCHEDULED
@@ -235,6 +240,32 @@ class Interview(Base):
     user = relationship("User", back_populates="interviews")
     faculty = relationship("Faculty")
     slot = relationship("InterviewSlot", back_populates="interviews")
+    interviewer = relationship("Administrator", foreign_keys=[interviewer_id])
+
+
+class SlotAvailability(Base):
+    """
+    Доступность проверяющих для проведения собеседований в слотах.
+    Связь многие-ко-многим между InterviewSlot и Administrator.
+    
+    Reviewer'ы отмечают, в каких слотах они готовы проводить собеседования.
+    Head Admin создает слоты, Reviewer'ы отмечают свою доступность.
+    """
+    __tablename__ = "slot_availability"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slot_id: Mapped[int] = mapped_column(ForeignKey("interview_slots.id", ondelete="CASCADE"))
+    interviewer_id: Mapped[int] = mapped_column(ForeignKey("administrators.id", ondelete="CASCADE"))
+    available: Mapped[bool] = mapped_column(Boolean, default=True)  # True = свободен, False = занят
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    slot = relationship("InterviewSlot", back_populates="available_interviewers")
+    interviewer = relationship("Administrator", back_populates="slot_availability")
+
+    __table_args__ = (
+        UniqueConstraint('slot_id', 'interviewer_id', name='uq_slot_interviewer'),
+    )
 
 
 class SubmissionStatus(str, Enum):

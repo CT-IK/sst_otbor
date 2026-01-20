@@ -55,6 +55,8 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
       PGADMIN_CONFIG_SERVER_MODE: "False"  # Одиночный режим (без сервера)
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"  # Отключаем требование мастер-пароля
+      # Отключаем логирование в stdout/stderr
+      PGADMIN_CONFIG_LOG_LEVEL: "ERROR"
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     networks:
@@ -64,6 +66,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Используем "none" драйвер логов чтобы полностью отключить логи
+    logging:
+      driver: "none"
 
   # FastAPI Backend + Mini App
   backend:
