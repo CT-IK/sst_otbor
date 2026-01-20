@@ -425,8 +425,8 @@ async def get_my_availability(
 @router.post("/{slot_id}/availability", response_model=AvailabilityResponse, status_code=status.HTTP_201_CREATED)
 async def set_availability(
     slot_id: int,
-    available: bool = Query(description="true = свободен, false = занят"),
     telegram_id: TelegramId,
+    available: bool = Query(description="true = свободен, false = занят"),
     db: AsyncSession = Depends(get_db),
 ):
     """
