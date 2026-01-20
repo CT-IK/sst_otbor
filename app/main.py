@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.core.redis import redis_client
-from app.api.routers import questionnaire, admin_stats
+from app.api.routers import questionnaire, admin_stats, interview_slots
 
 
 @asynccontextmanager
@@ -37,6 +37,7 @@ app.add_middleware(
 # Подключаем роутеры (API имеет приоритет над статикой)
 app.include_router(questionnaire.router, prefix="/api/v1")
 app.include_router(admin_stats.router, prefix="/api/v1")
+app.include_router(interview_slots.router, prefix="/api/v1")
 
 # Раздаём статику (CSS, JS) - ДО HTML роутов
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")

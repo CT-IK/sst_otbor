@@ -30,6 +30,7 @@ const state = {
     canSubmit: false,
     saveTimeout: null,
     isSaving: false,
+    adminRole: null, // head_admin | reviewer | null
 };
 
 // === Telegram Web App ===
@@ -116,6 +117,8 @@ DEBUG:
         const adminCheck = await api(`/admin/check/${state.facultyId}`);
         
         if (adminCheck.is_admin) {
+            // Сохраняем роль админа (head_admin или reviewer)
+            state.adminRole = adminCheck.role;
             // Админ — показываем статистику
             await loadAdminStats();
         } else {
@@ -342,8 +345,185 @@ function renderAdminStats(stats) {
                target="_blank" class="btn-link">
                 🔗 Открыть полную таблицу ответов
             </a>
+            ${state.adminRole === 'head_admin' ? `
+                <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" onclick="loadInterviewSlots()">
+                    📅 Слоты собеседований
+                </button>
+            ` : ''}
+            ${state.adminRole === 'reviewer' ? `
+                <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" onclick="loadInterviewSlots()">
+                    📅 Моя занятость
+                </button>
+            ` : ''}
         </div>
     `;
+}
+
+// === Слоты собеседований (для админов и проверяющих) ===
+async function loadInterviewSlots() {
+    try {
+        const data = await api(`/interview-slots/${state.facultyId}`);
+        // Скрываем MainButton для экранов слотов
+        if (tg) tg.MainButton.hide();
+        renderInterviewSlots(data);
+        showScreen('interview-slots');
+    } catch (error) {
+        console.error('Interview slots error:', error);
+        showError(error.message || 'Ошибка загрузки слотов собеседований');
+    }
+}
+
+function formatDateTime(dateStr) {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    return date.toLocaleString('ru-RU', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
+}
+
+function renderInterviewSlots(data) {
+    const container = document.getElementById('interview-slots-content');
+    if (!container) return;
+
+    const roleLabel = state.adminRole === 'head_admin'
+        ? 'Главный администратор'
+        : (state.adminRole === 'reviewer' ? 'Проверяющий' : 'Администратор');
+
+    const slots = data.slots || [];
+
+    const slotsHtml = slots.length === 0
+        ? '<p class="hint-text">Слотов собеседований пока нет. Создайте первый слот.</p>'
+        : slots.map(slot => {
+            const statusText = slot.is_active ? 'Активен' : 'Неактивен';
+            const capacityText = `${slot.current_participants} / ${slot.max_participants}`;
+            const freeText = `${slot.available_places}`;
+            const locationText = slot.location ? slot.location : 'Не указана';
+
+            let availabilityBlock = '';
+            if (state.adminRole === 'head_admin' || state.adminRole === 'reviewer') {
+                let label;
+                if (slot.my_availability === true) {
+                    label = '✅ Я свободен в это время';
+                } else if (slot.my_availability === false) {
+                    label = '⛔ Я занят в это время';
+                } else {
+                    label = '🤔 Не отмечено';
+                }
+
+                const nextAvailable = !(slot.my_availability === true);
+                const buttonText = nextAvailable ? 'Отметить как свободен' : 'Отметить как занят';
+
+                availabilityBlock = `
+                    <div class="slot-availability">
+                        <span class="slot-availability-label">${label}</span>
+                        <button class="btn btn-primary" onclick="toggleSlotAvailability(${slot.id}, ${nextAvailable})">
+                            ${buttonText}
+                        </button>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="slot-card">
+                    <div class="slot-header">
+                        <div class="slot-time">${formatDateTime(slot.datetime_start)} – ${formatDateTime(slot.datetime_end)}</div>
+                        <div class="slot-status ${slot.is_active ? 'active' : 'inactive'}">${statusText}</div>
+                    </div>
+                    <div class="slot-body">
+                        <div class="slot-row">
+                            <span>Мест занято / всего:</span>
+                            <span>${capacityText}</span>
+                        </div>
+                        <div class="slot-row">
+                            <span>Свободных мест:</span>
+                            <span>${freeText}</span>
+                        </div>
+                        <div class="slot-row">
+                            <span>Локация:</span>
+                            <span>${locationText}</span>
+                        </div>
+                    </div>
+                    ${availabilityBlock}
+                </div>
+            `;
+        }).join('');
+
+    const createButtonHtml = state.adminRole === 'head_admin'
+        ? `
+            <button class="btn btn-primary" style="width: 100%; margin-bottom: 12px;" onclick="openCreateSlotPrompt()">
+                ➕ Создать слот
+            </button>
+        `
+        : '';
+
+    container.innerHTML = `
+        <div class="stats-header">
+            <h1>📅 Слоты собеседований</h1>
+            <p class="stats-subtitle">${data.faculty_name} — ${roleLabel}</p>
+        </div>
+        <div class="stats-actions">
+            ${createButtonHtml}
+            <button class="btn" style="width: 100%;" onclick="loadAdminStats()">⬅️ Назад к статистике</button>
+        </div>
+        <div class="slots-list">
+            ${slotsHtml}
+        </div>
+    `;
+}
+
+async function openCreateSlotPrompt() {
+    const date = prompt('Дата (в формате ГГГГ-ММ-ДД, например 2026-02-01):');
+    if (!date) return;
+    const startTime = prompt('Время начала (часы:минуты, например 18:00):');
+    if (!startTime) return;
+    const endTime = prompt('Время окончания (часы:минуты, например 18:30):');
+    if (!endTime) return;
+    const maxParticipantsStr = prompt('Максимальное количество участников (по умолчанию 1):', '1');
+    if (!maxParticipantsStr) return;
+    const maxParticipants = parseInt(maxParticipantsStr, 10) || 1;
+    const location = prompt('Локация (аудитория/ссылка, опционально):') || null;
+
+    const toIso = (d, t) => {
+        const iso = `${d}T${t}`;
+        const dateObj = new Date(iso);
+        if (isNaN(dateObj.getTime())) {
+            throw new Error('Неверный формат даты/времени');
+        }
+        return dateObj.toISOString();
+    };
+
+    try {
+        const datetime_start = toIso(date, startTime);
+        const datetime_end = toIso(date, endTime);
+
+        await api(`/interview-slots/${state.facultyId}`, {
+            method: 'POST',
+            body: JSON.stringify({
+                datetime_start,
+                datetime_end,
+                max_participants: maxParticipants,
+                location,
+            }),
+        });
+
+        await loadInterviewSlots();
+    } catch (error) {
+        console.error('Create slot error:', error);
+        showError(error.message || 'Ошибка создания слота');
+    }
+}
+
+async function toggleSlotAvailability(slotId, available) {
+    try {
+        await api(`/interview-slots/${slotId}/availability?available=${available}`, {
+            method: 'POST',
+        });
+        await loadInterviewSlots();
+    } catch (error) {
+        console.error('Toggle availability error:', error);
+        showError(error.message || 'Ошибка изменения доступности');
+    }
 }
 
 // === Рендер вопросов ===
@@ -709,7 +889,7 @@ function validateForm() {
 // === UI хелперы ===
 function showScreen(screenId) {
     // Скрываем все экраны
-    const allScreens = ['loading', 'error', 'stage-closed', 'already-submitted', 'questionnaire', 'video-stage', 'admin-stats', 'no-faculty'];
+    const allScreens = ['loading', 'error', 'stage-closed', 'already-submitted', 'questionnaire', 'video-stage', 'admin-stats', 'interview-slots', 'no-faculty'];
     allScreens.forEach(id => {
         const screen = document.getElementById(id);
         if (screen) screen.classList.add('hidden');

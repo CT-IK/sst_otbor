@@ -591,6 +591,9 @@ body {
 .stats-actions {
     text-align: center;
     padding: var(--spacing);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
 }
 
 .btn-link {
@@ -601,4 +604,69 @@ body {
     background: var(--tg-theme-secondary-bg-color);
     border-radius: var(--border-radius);
     display: inline-block;
+}
+
+/* Interview Slots */
+.slots-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing);
+}
+
+.slot-card {
+    background: var(--tg-theme-secondary-bg-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing);
+}
+
+.slot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+}
+
+.slot-time {
+    font-weight: 500;
+}
+
+.slot-status {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 999px;
+}
+
+.slot-status.active {
+    background: rgba(52, 199, 89, 0.15);
+    color: #34c759;
+}
+
+.slot-status.inactive {
+    background: rgba(142, 142, 147, 0.15);
+    color: #8e8e93;
+}
+
+.slot-body {
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.slot-row {
+    display: flex;
+    justify-content: space-between;
+}
+
+.slot-availability {
+    margin-top: var(--spacing-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.slot-availability-label {
+    font-size: 13px;
+    color: var(--tg-theme-hint-color);
 }
