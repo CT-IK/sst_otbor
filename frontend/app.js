@@ -114,15 +114,22 @@ DEBUG:
         }
         
         // Проверяем, является ли пользователь админом
-        const adminCheck = await api(`/admin/check/${state.facultyId}`);
-        
+        try {
+            const adminCheck = await api(`/admin/check/${state.facultyId}`);
+            
         if (adminCheck.is_admin) {
             // Сохраняем роль админа (head_admin или reviewer)
-            state.adminRole = adminCheck.role;
+            state.adminRole = adminCheck.role || null;
+            console.log('Admin role detected:', state.adminRole);
             // Админ — показываем статистику
             await loadAdminStats();
         } else {
-            // Обычный пользователь — показываем анкету
+                // Обычный пользователь — показываем анкету
+                await loadQuestionnaire();
+            }
+        } catch (error) {
+            // Если ошибка проверки админа, показываем анкету
+            console.log('Admin check failed, showing questionnaire:', error);
             await loadQuestionnaire();
         }
         
@@ -346,12 +353,12 @@ function renderAdminStats(stats) {
                 🔗 Открыть полную таблицу ответов
             </a>
             ${state.adminRole === 'head_admin' ? `
-                <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" onclick="loadInterviewSlots()">
+                <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" onclick="window.loadInterviewSlots()">
                     📅 Слоты собеседований
                 </button>
             ` : ''}
             ${state.adminRole === 'reviewer' ? `
-                <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" onclick="loadInterviewSlots()">
+                <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" onclick="window.loadInterviewSlots()">
                     📅 Моя занятость
                 </button>
             ` : ''}
@@ -401,6 +408,7 @@ function renderInterviewSlots(data) {
             const locationText = slot.location ? slot.location : 'Не указана';
 
             let availabilityBlock = '';
+            // Показываем блок доступности для всех админов и проверяющих
             if (state.adminRole === 'head_admin' || state.adminRole === 'reviewer') {
                 let label;
                 if (slot.my_availability === true) {
@@ -417,7 +425,7 @@ function renderInterviewSlots(data) {
                 availabilityBlock = `
                     <div class="slot-availability">
                         <span class="slot-availability-label">${label}</span>
-                        <button class="btn btn-primary" onclick="toggleSlotAvailability(${slot.id}, ${nextAvailable})">
+                        <button class="btn btn-primary" onclick="window.toggleSlotAvailability(${slot.id}, ${nextAvailable})">
                             ${buttonText}
                         </button>
                     </div>
@@ -451,7 +459,7 @@ function renderInterviewSlots(data) {
 
     const createButtonHtml = state.adminRole === 'head_admin'
         ? `
-            <button class="btn btn-primary" style="width: 100%; margin-bottom: 12px;" onclick="openCreateSlotPrompt()">
+            <button class="btn btn-primary" style="width: 100%; margin-bottom: 12px;" onclick="window.openCreateSlotPrompt()">
                 ➕ Создать слот
             </button>
         `
@@ -464,7 +472,7 @@ function renderInterviewSlots(data) {
         </div>
         <div class="stats-actions">
             ${createButtonHtml}
-            <button class="btn" style="width: 100%;" onclick="loadAdminStats()">⬅️ Назад к статистике</button>
+            <button class="btn" style="width: 100%;" onclick="window.loadAdminStats()">⬅️ Назад к статистике</button>
         </div>
         <div class="slots-list">
             ${slotsHtml}
@@ -947,6 +955,12 @@ function showAlreadySubmitted(submittedAtOrMessage) {
         elements.submissionDate.textContent = submittedAtOrMessage;
     }
 }
+
+// === Экспорт функций в window для использования в onclick ===
+window.loadInterviewSlots = loadInterviewSlots;
+window.loadAdminStats = loadAdminStats;
+window.openCreateSlotPrompt = openCreateSlotPrompt;
+window.toggleSlotAvailability = toggleSlotAvailability;
 
 // === Запуск ===
 document.addEventListener('DOMContentLoaded', init);

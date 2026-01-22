@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date, time
 from enum import Enum
 
 from sqlalchemy import (
@@ -8,6 +8,8 @@ from sqlalchemy import (
     Boolean,
     JSON,
     DateTime,
+    Date,
+    Time,
     Text,
     BigInteger,
     Enum as SQLEnum,
@@ -240,6 +242,8 @@ class Interview(Base):
     user = relationship("User", back_populates="interviews")
     faculty = relationship("Faculty")
     slot = relationship("InterviewSlot", back_populates="interviews")
+    time_slot_id: Mapped[int | None] = mapped_column(ForeignKey("time_slots.id", ondelete="SET NULL"), nullable=True)  # Новый временной слот
+    time_slot = relationship("TimeSlot", back_populates="interviews", foreign_keys=[time_slot_id])
     interviewer = relationship("Administrator", foreign_keys=[interviewer_id])
 
 
@@ -265,6 +269,74 @@ class SlotAvailability(Base):
 
     __table_args__ = (
         UniqueConstraint('slot_id', 'interviewer_id', name='uq_slot_interviewer'),
+    )
+
+
+class InterviewDay(Base):
+    """
+    Дни, когда проводятся собеседования.
+    Head Admin создает дни собеседований.
+    """
+    __tablename__ = "interview_days"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    date: Mapped[date] = mapped_column(Date)  # Дата собеседований
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Общая локация для дня
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    faculty = relationship("Faculty")
+    creator = relationship("Administrator")
+    time_slots = relationship("TimeSlot", back_populates="day", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint('faculty_id', 'date', name='uq_faculty_date'),
+    )
+
+
+class TimeSlot(Base):
+    """
+    Временные слоты в день собеседований (10:00, 11:00, ..., 22:00).
+    Head Admin устанавливает количество доступных мест для каждого временного слота.
+    """
+    __tablename__ = "time_slots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    day_id: Mapped[int] = mapped_column(ForeignKey("interview_days.id", ondelete="CASCADE"))
+    time: Mapped[Time] = mapped_column(Time)  # Время начала слота (10:00, 11:00, и т.д.)
+    max_participants: Mapped[int] = mapped_column(Integer, default=0)  # Количество мест (0-10, устанавливает Head Admin)
+    current_participants: Mapped[int] = mapped_column(Integer, default=0)  # Текущее количество записей
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    day = relationship("InterviewDay", back_populates="time_slots")
+    availabilities = relationship("TimeSlotAvailability", back_populates="time_slot", cascade="all, delete-orphan")
+    interviews = relationship("Interview", back_populates="time_slot")
+
+    __table_args__ = (
+        UniqueConstraint('day_id', 'time', name='uq_day_time'),
+    )
+
+
+class TimeSlotAvailability(Base):
+    """
+    Доступность проверяющих в временных слотах.
+    Reviewer'ы отмечают галочками, в какие временные слоты они могут проводить собеседования.
+    """
+    __tablename__ = "time_slot_availability"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    time_slot_id: Mapped[int] = mapped_column(ForeignKey("time_slots.id", ondelete="CASCADE"))
+    interviewer_id: Mapped[int] = mapped_column(ForeignKey("administrators.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    time_slot = relationship("TimeSlot", back_populates="availabilities")
+    interviewer = relationship("Administrator", back_populates="time_slot_availability")
+
+    __table_args__ = (
+        UniqueConstraint('time_slot_id', 'interviewer_id', name='uq_time_slot_interviewer'),
     )
 
 
