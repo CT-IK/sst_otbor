@@ -4,20 +4,17 @@
 
 ### 1. Применить миграцию БД
 
-На сервере выполните:
+На сервере выполните (подключитесь к внешнему PostgreSQL):
 
 ```bash
 # Перейти в директорию проекта
 cd ~/ct/sst_otbor
 
-# Применить SQL миграцию
-cat migration/add_interview_days_structure.sql | docker compose -f docker-compose.prod.yml exec -T postgres psql -U sst_user -d sst_db
-```
+# Применить SQL миграцию (замените параметры подключения на свои)
+psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db < migration/add_interview_days_structure.sql
 
-Или напрямую через psql:
-
-```bash
-docker compose -f docker-compose.prod.yml exec postgres psql -U sst_user -d sst_db -f /path/to/migration/add_interview_days_structure.sql
+# Или через переменные окружения
+PGPASSWORD=your_password psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db < migration/add_interview_days_structure.sql
 ```
 
 ### 2. Пересобрать и перезапустить backend
@@ -49,8 +46,8 @@ curl http://localhost:8000/api/v1/interview-days/1?telegram_id=YOUR_TELEGRAM_ID
 ### 4. Проверить структуру БД
 
 ```bash
-# Подключиться к БД
-docker compose -f docker-compose.prod.yml exec postgres psql -U sst_user -d sst_db
+# Подключиться к внешнему PostgreSQL
+psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db
 
 # Проверить таблицы
 \dt interview_days
@@ -87,7 +84,7 @@ docker compose -f docker-compose.prod.yml exec postgres psql -U sst_user -d sst_
 
 2. Проверьте, что миграция применилась:
    ```bash
-   docker compose -f docker-compose.prod.yml exec postgres psql -U sst_user -d sst_db -c "\d interview_days"
+   psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db -c "\d interview_days"
    ```
 
 3. Если нужно откатить миграцию (осторожно!):

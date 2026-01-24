@@ -15,12 +15,12 @@ class Settings(BaseSettings):
     debug: bool = Field(default=True, validation_alias="DEBUG")
 
     # PostgreSQL (можно задать напрямую через DB_URL или через отдельные переменные)
-    db_url: str | None = None
-    postgres_host: str = "localhost"
-    postgres_port: int = 5432
-    postgres_user: str = "postgres"
-    postgres_password: str = ""
-    postgres_db: str = "postgres"
+    db_url: str | None = Field(default=None, validation_alias="DB_URL")
+    postgres_host: str = Field(default="localhost", validation_alias="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, validation_alias="POSTGRES_PORT")
+    postgres_user: str = Field(default="postgres", validation_alias="POSTGRES_USER")
+    postgres_password: str = Field(default="", validation_alias="POSTGRES_PASSWORD")
+    postgres_db: str = Field(default="postgres", validation_alias="POSTGRES_DB")
 
     # Redis
     redis_host: str = "localhost"

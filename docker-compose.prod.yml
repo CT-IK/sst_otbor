@@ -1,34 +1,11 @@
 # Используем внешнюю сеть для связи с nginx
 networks:
-  infra_network:
+  infra_net:
     external: true
   internal:
     driver: bridge
 
 services:
-  # PostgreSQL
-  postgres:
-    image: postgres:15-alpine
-    container_name: sst_postgres
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-sst_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-sst_db}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - internal
-    ports:
-      # Проброс порта для доступа с сервера (через SSH туннель)
-      - "127.0.0.1:5432:5432"  # Доступ только с localhost сервера
-    command: postgres -c listen_addresses='*'
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sst_user} -d ${POSTGRES_DB:-sst_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # Redis
   redis:
     image: redis:7-alpine
@@ -45,56 +22,39 @@ services:
       timeout: 5s
       retries: 5
 
-  # pgAdmin - веб-интерфейс для управления PostgreSQL
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: sst_pgadmin
-    restart: always
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@sst.local}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
-      PGADMIN_CONFIG_SERVER_MODE: "False"  # Одиночный режим (без сервера)
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"  # Отключаем требование мастер-пароля
-      # Отключаем логирование в stdout/stderr
-      PGADMIN_CONFIG_LOG_LEVEL: "ERROR"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    networks:
-      - internal
-    ports:
-      - "5050:80"  # Доступ через http://IP_сервера:5050
-    depends_on:
-      postgres:
-        condition: service_healthy
-    # Используем "none" драйвер логов чтобы полностью отключить логи
-    logging:
-      driver: "none"
-
   # FastAPI Backend + Mini App
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sst_backend
+    container_name: sst_otbor
     restart: always
     environment:
       - ENV=prod
       - DEBUG=false
-      - DB_URL=postgresql+asyncpg://${POSTGRES_USER:-sst_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sst_db}
+      # Подключение к внешнему PostgreSQL (настройте переменные в .env)
+      - DB_URL=${DB_URL}
+      # Или используйте отдельные переменные:
+      # - POSTGRES_HOST=${POSTGRES_HOST}
+      # - POSTGRES_PORT=${POSTGRES_PORT}
+      # - POSTGRES_USER=${POSTGRES_USER}
+      # - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # - POSTGRES_DB=${POSTGRES_DB}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SUPER_ADMIN_IDS=${SUPER_ADMIN_IDS}
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - internal
-      - infra_network  # Для доступа от nginx
+      - infra_net  # Для доступа от nginx
     expose:
       - "8000"
+    labels:
+      # Метка для nginx (если используется автоматическое обнаружение)
+      - "nginx.proxy=true"
 
   # Telegram Bot
   bot:
@@ -106,20 +66,23 @@ services:
     environment:
       - ENV=prod
       - DEBUG=false
-      - DB_URL=postgresql+asyncpg://${POSTGRES_USER:-sst_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sst_db}
+      # Подключение к внешнему PostgreSQL (настройте переменные в .env)
+      - DB_URL=${DB_URL}
+      # Или используйте отдельные переменные:
+      # - POSTGRES_HOST=${POSTGRES_HOST}
+      # - POSTGRES_PORT=${POSTGRES_PORT}
+      # - POSTGRES_USER=${POSTGRES_USER}
+      # - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # - POSTGRES_DB=${POSTGRES_DB}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SUPER_ADMIN_IDS=${SUPER_ADMIN_IDS}
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - internal
 
 volumes:
-  postgres_data:
   redis_data:
-  pgadmin_data:
