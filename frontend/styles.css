@@ -320,6 +320,10 @@ body {
     cursor: pointer;
     transition: all 0.2s ease;
     border: 2px solid transparent;
+    position: relative;
+    /* Предотвращаем прокрутку при клике */
+    scroll-margin: 0 !important;
+    scroll-padding: 0 !important;
 }
 
 .option-item:active {
@@ -332,7 +336,16 @@ body {
 }
 
 .option-item input {
-    display: none;
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    pointer-events: none;
+    /* Предотвращаем прокрутку при фокусе */
+    scroll-margin: 0 !important;
 }
 
 .option-radio,

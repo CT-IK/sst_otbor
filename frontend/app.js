@@ -673,12 +673,29 @@ function createChoiceInput(question) {
         input.name = `question_${question.id}`;
         input.value = option.value;
         input.checked = state.answers[question.id] === option.value;
+        input.tabIndex = -1; // Предотвращаем получение фокуса через Tab
         
-        input.addEventListener('change', (e) => {
+        // Обрабатываем изменение состояния
+        const handleChange = () => {
             // Убираем selected у всех
             wrapper.querySelectorAll('.option-item').forEach(el => el.classList.remove('selected'));
             item.classList.add('selected');
             updateAnswer(question.id, option.value);
+        };
+        
+        input.addEventListener('change', handleChange);
+        
+        // Обрабатываем клик на label вручную, чтобы избежать автоматической прокрутки
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Устанавливаем checked программно
+            input.checked = true;
+            // Вызываем обработчик изменения
+            handleChange();
+            // Создаём и диспатчим событие change для совместимости
+            const changeEvent = new Event('change', { bubbles: true });
+            input.dispatchEvent(changeEvent);
         });
         
         const radio = document.createElement('span');
@@ -714,8 +731,10 @@ function createMultipleChoiceInput(question) {
         input.type = 'checkbox';
         input.value = option.value;
         input.checked = currentValue.includes(option.value);
+        input.tabIndex = -1; // Предотвращаем получение фокуса через Tab
         
-        input.addEventListener('change', (e) => {
+        // Обрабатываем изменение состояния
+        const handleChange = () => {
             item.classList.toggle('selected', input.checked);
             
             // Собираем все выбранные
@@ -724,6 +743,21 @@ function createMultipleChoiceInput(question) {
                 selected.push(el.value);
             });
             updateAnswer(question.id, selected);
+        };
+        
+        input.addEventListener('change', handleChange);
+        
+        // Обрабатываем клик на label вручную, чтобы избежать автоматической прокрутки
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Переключаем checked программно
+            input.checked = !input.checked;
+            // Вызываем обработчик изменения
+            handleChange();
+            // Создаём и диспатчим событие change для совместимости
+            const changeEvent = new Event('change', { bubbles: true });
+            input.dispatchEvent(changeEvent);
         });
         
         const checkbox = document.createElement('span');
