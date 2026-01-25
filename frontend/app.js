@@ -162,18 +162,17 @@ DEBUG:
             }
         }, true); // Используем capture phase
         
-        // Также предотвращаем прокрутку при клике на label
+        // Также предотвращаем прокрутку при клике на label (но не блокируем клики)
         document.addEventListener('click', (e) => {
             // Если клик на label или его дочернем элементе
             if (e.target.closest('label.option-item')) {
                 const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        window.scrollTo({ top: scrollY, behavior: 'auto' });
-                    });
-                });
+                // Восстанавливаем позицию после обработки клика (не блокируем событие)
+                setTimeout(() => {
+                    window.scrollTo({ top: scrollY, behavior: 'auto' });
+                }, 10);
             }
-        }, true);
+        }, false); // Используем bubble phase, чтобы не мешать обработчикам на элементах
         
     } catch (error) {
         console.error('Init error:', error);
@@ -703,20 +702,21 @@ function createChoiceInput(question) {
         input.checked = state.answers[question.id] === option.value;
         
         input.addEventListener('change', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            // НЕ используем preventDefault() - это блокирует изменение состояния input!
             // Убираем selected у всех
             wrapper.querySelectorAll('.option-item').forEach(el => el.classList.remove('selected'));
             item.classList.add('selected');
             updateAnswer(question.id, option.value);
         });
         
-        // Предотвращаем прокрутку при клике на label
+        // Предотвращаем прокрутку при клике на label (но не блокируем изменение input)
         item.addEventListener('click', (e) => {
-            // Если клик не на самом input, предотвращаем стандартное поведение
-            if (e.target !== input) {
-                e.preventDefault();
-            }
+            // Сохраняем позицию прокрутки, но НЕ блокируем клик
+            const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+            // Восстанавливаем позицию после обработки клика
+            setTimeout(() => {
+                window.scrollTo({ top: scrollY, behavior: 'auto' });
+            }, 0);
         });
         
         // Предотвращаем прокрутку при фокусе на input
@@ -764,8 +764,7 @@ function createMultipleChoiceInput(question) {
         input.checked = currentValue.includes(option.value);
         
         input.addEventListener('change', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            // НЕ используем preventDefault() - это блокирует изменение состояния input!
             item.classList.toggle('selected', input.checked);
             
             // Собираем все выбранные
@@ -776,19 +775,14 @@ function createMultipleChoiceInput(question) {
             updateAnswer(question.id, selected);
         });
         
-        // Предотвращаем прокрутку при клике на label
+        // Предотвращаем прокрутку при клике на label (но не блокируем изменение input)
         item.addEventListener('click', (e) => {
-            // Сохраняем текущую позицию прокрутки
-            const scrollY = window.scrollY;
-            // Если клик не на самом input, предотвращаем стандартное поведение
-            if (e.target !== input) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            // Восстанавливаем позицию прокрутки после небольшой задержки
-            requestAnimationFrame(() => {
+            // Сохраняем позицию прокрутки, но НЕ блокируем клик
+            const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+            // Восстанавливаем позицию после обработки клика
+            setTimeout(() => {
                 window.scrollTo({ top: scrollY, behavior: 'auto' });
-            });
+            }, 0);
         });
         
         // Предотвращаем прокрутку при фокусе на input
