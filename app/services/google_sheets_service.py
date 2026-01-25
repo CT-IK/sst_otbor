@@ -7,8 +7,14 @@ import logging
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-import gspread
-from google.oauth2.service_account import Credentials
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+    GOOGLE_SHEETS_AVAILABLE = True
+except ImportError:
+    GOOGLE_SHEETS_AVAILABLE = False
+    gspread = None
+    Credentials = None
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +37,12 @@ class GoogleSheetsService:
     
     def _get_client(self) -> gspread.Client:
         """Получить клиент Google Sheets (создаёт при первом обращении)"""
+        if not GOOGLE_SHEETS_AVAILABLE:
+            raise RuntimeError(
+                "Библиотеки gspread и google-auth не установлены. "
+                "Установите их: pip install gspread google-auth google-auth-oauthlib google-auth-httplib2"
+            )
+        
         if self._client is None:
             if not self.credentials_path.exists():
                 raise FileNotFoundError(
@@ -321,6 +333,10 @@ class GoogleSheetsService:
         Returns:
             Количество выгруженных анкет (количество строк минус заголовок)
         """
+        if not GOOGLE_SHEETS_AVAILABLE:
+            logger.warning("Google Sheets библиотеки не установлены, возвращаю 0")
+            return 0
+        
         try:
             client = self._get_client()
             spreadsheet_id = self._extract_spreadsheet_id(sheet_url)
