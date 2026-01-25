@@ -30,3 +30,4 @@ logs/
 postgres_data/
 redis_data/
 DEPLOY.md
+credentials.json
