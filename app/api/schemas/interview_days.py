@@ -1,7 +1,7 @@
 """
 Схемы для управления днями собеседований и временными слотами.
 """
-from datetime import date, time
+from datetime import date as date_type, time
 from typing import Optional, List
 
 from pydantic import BaseModel, Field
@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 class InterviewDayCreate(BaseModel):
     """Создание дня собеседований (Head Admin)"""
-    date: date = Field(description="Дата собеседований")
+    date: date_type = Field(description="Дата собеседований")
     location: Optional[str] = Field(default=None, max_length=255, description="Локация (аудитория/ссылка)")
 
 
@@ -41,7 +41,7 @@ class TimeSlotUpdate(BaseModel):
 class InterviewDayResponse(BaseModel):
     """Информация о дне собеседований"""
     id: int
-    date: date
+    date: date_type
     location: Optional[str] = None
     is_active: bool
     time_slots: List[TimeSlotResponse] = Field(default_factory=list)
@@ -69,6 +69,6 @@ class TimeSlotAvailabilityListResponse(BaseModel):
     """Список доступностей для временного слота"""
     time_slot_id: int
     time: str
-    date: date
+    date: date_type
     availabilities: List[TimeSlotAvailabilityResponse]
     total: int
