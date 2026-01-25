@@ -67,17 +67,25 @@ asyncio.run(test())
 "
 ```
 
-## Применение миграций
+## Применение миграций через Alembic
 
-Теперь миграции применяются напрямую к внешнему PostgreSQL:
+Миграции применяются через Alembic (рекомендуемый способ):
 
 ```bash
-# Применить миграцию
-psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db < migration/add_interview_days_structure.sql
+# Перейти в директорию проекта
+cd ~/ct/sst_otbor
 
-# Или с паролем
-PGPASSWORD=your_password psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db < migration/add_interview_days_structure.sql
+# Убедиться, что .env файл настроен:
+# DB_URL=postgresql+asyncpg://sst_user:cheburashaka_blya@127.0.0.1:6432/sst_otbor_db
+
+# Применить все миграции до последней версии
+docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+
+# Проверить текущую версию БД
+docker compose -f docker-compose.prod.yml exec backend alembic current
 ```
+
+Подробная инструкция в файле `ALEMBIC_SETUP.md`.
 
 ## Настройка nginx
 

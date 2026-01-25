@@ -16,16 +16,16 @@
 ENV=prod
 DEBUG=false
 
-# Подключение к внешнему PostgreSQL
+# Подключение к внешнему PostgreSQL через pgbouncer
 # Вариант 1: Полный URL (рекомендуется)
-DB_URL=postgresql+asyncpg://sst_user:your_password@your_postgres_host:5432/sst_db
+DB_URL=postgresql+asyncpg://sst_user:cheburashaka_blya@127.0.0.1:6432/sst_otbor_db
 
 # Вариант 2: Отдельные переменные (если не используете DB_URL)
-# POSTGRES_HOST=your_postgres_host
-# POSTGRES_PORT=5432
+# POSTGRES_HOST=127.0.0.1
+# POSTGRES_PORT=6432  # pgbouncer порт
 # POSTGRES_USER=sst_user
-# POSTGRES_PASSWORD=your_password
-# POSTGRES_DB=sst_db
+# POSTGRES_PASSWORD=cheburashaka_blya
+# POSTGRES_DB=sst_otbor_db
 
 # Redis (локальный контейнер)
 REDIS_HOST=redis
@@ -84,16 +84,45 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f backend bot redis
 ```
 
-## Применение миграций БД
+## Применение миграций БД через Alembic
 
-Теперь миграции применяются напрямую к внешнему PostgreSQL:
+Миграции применяются через Alembic (рекомендуемый способ):
 
 ```bash
-# Применить миграцию
-psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db < migration/add_interview_days_structure.sql
+# Перейти в директорию проекта
+cd ~/ct/sst_otbor
 
-# Или с паролем через переменную окружения
-PGPASSWORD=your_password psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db < migration/add_interview_days_structure.sql
+# Применить все миграции до последней версии
+docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+
+# Или локально (если настроен .env)
+alembic upgrade head
+
+# Проверить текущую версию БД
+docker compose -f docker-compose.prod.yml exec backend alembic current
+
+# Просмотреть историю миграций
+docker compose -f docker-compose.prod.yml exec backend alembic history
+```
+
+### Создание новой миграции
+
+```bash
+# Создать новую миграцию на основе изменений в моделях
+docker compose -f docker-compose.prod.yml exec backend alembic revision --autogenerate -m "описание изменений"
+
+# Или локально
+alembic revision --autogenerate -m "описание изменений"
+```
+
+### Откат миграций
+
+```bash
+# Откатить одну миграцию
+docker compose -f docker-compose.prod.yml exec backend alembic downgrade -1
+
+# Откатить до конкретной версии
+docker compose -f docker-compose.prod.yml exec backend alembic downgrade <revision_id>
 ```
 
 ## Удалённые сервисы

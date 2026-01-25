@@ -2,22 +2,34 @@
 
 ## Шаги для применения:
 
-### 1. Применить миграцию БД
+### 1. Создать миграцию для interview_days (если ещё не создана)
 
-На сервере выполните (подключитесь к внешнему PostgreSQL):
+Если миграция для interview_days ещё не создана через Alembic:
 
 ```bash
 # Перейти в директорию проекта
 cd ~/ct/sst_otbor
 
-# Применить SQL миграцию (замените параметры подключения на свои)
-psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db < migration/add_interview_days_structure.sql
+# Создать миграцию автоматически на основе моделей
+docker compose -f docker-compose.prod.yml exec backend alembic revision --autogenerate -m "add interview days and time slots"
 
-# Или через переменные окружения
-PGPASSWORD=your_password psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db < migration/add_interview_days_structure.sql
+# Проверить созданную миграцию в migration/versions/
 ```
 
-### 2. Пересобрать и перезапустить backend
+### 2. Применить миграцию БД через Alembic
+
+```bash
+# Убедиться, что .env файл настроен:
+# DB_URL=postgresql+asyncpg://sst_user:cheburashaka_blya@127.0.0.1:6432/sst_otbor_db
+
+# Применить все миграции до последней версии
+docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+
+# Проверить текущую версию БД
+docker compose -f docker-compose.prod.yml exec backend alembic current
+```
+
+### 3. Пересобрать и перезапустить backend
 
 ```bash
 # Пересобрать backend контейнер
@@ -33,7 +45,7 @@ docker compose -f docker-compose.prod.yml up -d backend
 ./scripts/rebuild_backend.sh
 ```
 
-### 3. Проверить, что всё работает
+### 4. Проверить, что всё работает
 
 ```bash
 # Проверить логи backend
@@ -43,16 +55,19 @@ docker compose -f docker-compose.prod.yml logs -f backend --tail=50
 curl http://localhost:8000/api/v1/interview-days/1?telegram_id=YOUR_TELEGRAM_ID
 ```
 
-### 4. Проверить структуру БД
+### 5. Проверить структуру БД
 
 ```bash
-# Подключиться к внешнему PostgreSQL
-psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db
+# Подключиться к PostgreSQL через pgbouncer
+psql "postgresql://sst_user:cheburashaka_blya@127.0.0.1:6432/sst_otbor_db"
 
 # Проверить таблицы
 \dt interview_days
 \dt time_slots
 \dt time_slot_availability
+
+# Проверить структуру таблицы
+\d interview_days
 
 # Выйти
 \q
@@ -84,7 +99,11 @@ psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db
 
 2. Проверьте, что миграция применилась:
    ```bash
-   psql -h YOUR_POSTGRES_HOST -p 5432 -U sst_user -d sst_db -c "\d interview_days"
+   # Через pgbouncer
+   psql "postgresql://sst_user:cheburashaka_blya@127.0.0.1:6432/sst_otbor_db" -c "\d interview_days"
+   
+   # Или через Alembic
+   docker compose -f docker-compose.prod.yml exec backend alembic current
    ```
 
 3. Если нужно откатить миграцию (осторожно!):
