@@ -8,19 +8,20 @@ class Settings(BaseSettings):
         env_file=".env", 
         env_file_encoding="utf-8",
         extra="ignore",  # Игнорировать лишние переменные из .env
-        case_sensitive=False  # Читать ENV и env как одно и то же
+        case_sensitive=False,  # Читать ENV и env как одно и то же
+        populate_by_name=True  # Разрешить использовать и alias, и имя поля
     )
 
-    env: Literal["prod", "dev", "test"] = Field(default="dev", validation_alias="ENV")
-    debug: bool = Field(default=True, validation_alias="DEBUG")
+    env: Literal["prod", "dev", "test"] = Field(default="dev", alias="ENV")
+    debug: bool = Field(default=True, alias="DEBUG")
 
     # PostgreSQL (можно задать напрямую через DB_URL или через отдельные переменные)
-    db_url: str | None = Field(default=None, validation_alias="DB_URL")
-    postgres_host: str = Field(default="localhost", validation_alias="POSTGRES_HOST")
-    postgres_port: int = Field(default=5432, validation_alias="POSTGRES_PORT")
-    postgres_user: str = Field(default="postgres", validation_alias="POSTGRES_USER")
-    postgres_password: str = Field(default="", validation_alias="POSTGRES_PASSWORD")
-    postgres_db: str = Field(default="postgres", validation_alias="POSTGRES_DB")
+    db_url: str | None = Field(default=None, alias="DB_URL")
+    postgres_host: str = Field(default="localhost", alias="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
+    postgres_user: str = Field(default="postgres", alias="POSTGRES_USER")
+    postgres_password: str = Field(default="", alias="POSTGRES_PASSWORD")
+    postgres_db: str = Field(default="postgres", alias="POSTGRES_DB")
 
     # Redis
     redis_host: str = "localhost"

@@ -29,6 +29,8 @@ services:
       dockerfile: Dockerfile
     container_name: sst_otbor
     restart: always
+    env_file:
+      - .env
     environment:
       - ENV=prod
       - DEBUG=false
@@ -63,6 +65,8 @@ services:
       dockerfile: Dockerfile.bot
     container_name: sst_bot
     restart: always
+    env_file:
+      - .env
     environment:
       - ENV=prod
       - DEBUG=false
