@@ -36,6 +36,12 @@ html, body {
     font-size: 16px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    scroll-behavior: auto; /* Отключаем плавную прокрутку */
+}
+
+/* Предотвращаем автоматическую прокрутку при фокусе */
+input, textarea {
+    scroll-margin: 0;
 }
 
 body {

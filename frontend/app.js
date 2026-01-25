@@ -141,6 +141,34 @@ DEBUG:
             });
         }
         
+        // Глобальный обработчик для предотвращения прокрутки при фокусе на input/textarea
+        let savedScrollY = 0;
+        document.addEventListener('focusin', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                // Сохраняем позицию ДО того, как браузер прокрутит
+                savedScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+                // Восстанавливаем позицию в следующем кадре
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        window.scrollTo({ top: savedScrollY, behavior: 'auto' });
+                    });
+                });
+            }
+        }, true); // Используем capture phase
+        
+        // Также предотвращаем прокрутку при клике на label
+        document.addEventListener('click', (e) => {
+            // Если клик на label или его дочернем элементе
+            if (e.target.closest('label.option-item')) {
+                const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        window.scrollTo({ top: scrollY, behavior: 'auto' });
+                    });
+                });
+            }
+        }, true);
+        
     } catch (error) {
         console.error('Init error:', error);
         showError(error.message);
@@ -721,20 +749,27 @@ function createMultipleChoiceInput(question) {
         
         // Предотвращаем прокрутку при клике на label
         item.addEventListener('click', (e) => {
+            // Сохраняем текущую позицию прокрутки
+            const scrollY = window.scrollY;
             // Если клик не на самом input, предотвращаем стандартное поведение
             if (e.target !== input) {
                 e.preventDefault();
+                e.stopPropagation();
             }
+            // Восстанавливаем позицию прокрутки после небольшой задержки
+            requestAnimationFrame(() => {
+                window.scrollTo({ top: scrollY, behavior: 'auto' });
+            });
         });
         
         // Предотвращаем прокрутку при фокусе на input
         input.addEventListener('focus', (e) => {
             // Сохраняем текущую позицию прокрутки
             const scrollY = window.scrollY;
-            // Небольшая задержка, чтобы предотвратить прокрутку браузера
-            setTimeout(() => {
-                window.scrollTo(0, scrollY);
-            }, 0);
+            // Восстанавливаем позицию прокрутки
+            requestAnimationFrame(() => {
+                window.scrollTo({ top: scrollY, behavior: 'auto' });
+            });
         });
         
         const checkbox = document.createElement('span');
