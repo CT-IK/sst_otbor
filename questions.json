@@ -1,0 +1,153 @@
+[
+    {
+        "id": "surname",
+        "text": "Фамилия",
+        "type": "text",
+        "required": true,
+        "order": 1,
+        "max_length": 100
+    },
+    {
+        "id": "first_name",
+        "text": "Имя",
+        "type": "text",
+        "required": true,
+        "order": 2,
+        "max_length": 100
+    },
+    {
+        "id": "middle_name",
+        "text": "Отчество",
+        "type": "text",
+        "required": true,
+        "order": 3,
+        "max_length": 100
+    },
+    {
+        "id": "course",
+        "text": "Курс обучения",
+        "type": "choice",
+        "required": true,
+        "order": 4,
+        "options": [
+            {"value": "1", "label": "1 курс"},
+            {"value": "2", "label": "2 курс"},
+            {"value": "3", "label": "3 курс"},
+            {"value": "4", "label": "4 курс"},
+            {"value": "5", "label": "5 курс"},
+            {"value": "6", "label": "6 курс"}
+        ]
+    },
+    {
+        "id": "group",
+        "text": "Учебная группа (в формате ФФ25-2)",
+        "type": "text",
+        "required": true,
+        "order": 5,
+        "max_length": 20,
+        "placeholder": "ФФ25-2"
+    },
+    {
+        "id": "study_form",
+        "text": "Форма обучения",
+        "type": "choice",
+        "required": true,
+        "order": 6,
+        "options": [
+            {"value": "full_time", "label": "Очная"},
+            {"value": "part_time", "label": "Очно-заочная"}
+        ]
+    },
+    {
+        "id": "vk_link",
+        "text": "Ссылка на ВК (например: vk.com/ivanivanov)",
+        "type": "text",
+        "required": true,
+        "order": 7,
+        "max_length": 200,
+        "placeholder": "vk.com/ivanivanov"
+    },
+    {
+        "id": "gmail",
+        "text": "Гугл-почта (@gmail.com)",
+        "type": "text",
+        "required": true,
+        "order": 8,
+        "max_length": 100,
+        "placeholder": "example@gmail.com"
+    },
+    {
+        "id": "telegram_username",
+        "text": "Ник в Telegram",
+        "type": "text",
+        "required": true,
+        "order": 9,
+        "max_length": 50,
+        "placeholder": "@username"
+    },
+    {
+        "id": "additional_employment",
+        "text": "Есть ли у тебя дополнительная занятость помимо учёбы (работа и т.д.)? Какие у тебя планы на этот учебный год?",
+        "type": "text",
+        "required": true,
+        "order": 10,
+        "max_length": 2000
+    },
+    {
+        "id": "teamwork_experience",
+        "text": "Опиши свой опыт командной работы. Ты можешь привести пример в рамках школьных активностей или учебы, где ты работал(-а) в команде или в паре с кем-либо.",
+        "type": "text",
+        "required": true,
+        "order": 11,
+        "max_length": 2000
+    },
+    {
+        "id": "event_organization_experience",
+        "text": "Если есть, опиши свой опыт участия в организации мероприятий и членства в школьных или молодёжных организациях самоуправления.",
+        "type": "text",
+        "required": true,
+        "order": 12,
+        "max_length": 2000
+    },
+    {
+        "id": "special_skills",
+        "text": "Расскажи о своих особенных навыках (например, навыках работы в графических и видеоредакторах, написания ботов, работы в продуктах Microsoft, Google) или любых других, которыми хочешь поделиться.",
+        "type": "text",
+        "required": true,
+        "order": 13,
+        "max_length": 2000
+    },
+    {
+        "id": "why_apply",
+        "text": "Почему ты решил(-а) заполнить эту анкету?",
+        "type": "text",
+        "required": true,
+        "order": 14,
+        "max_length": 2000
+    },
+    {
+        "id": "what_want_to_get",
+        "text": "Что бы ты хотел(-а) получить от нахождения в Студенческом совете?",
+        "type": "text",
+        "required": true,
+        "order": 15,
+        "max_length": 2000
+    },
+    {
+        "id": "how_learned",
+        "text": "Как ты узнал(-а) об отборе в Студенческий совет?",
+        "type": "multiple_choice",
+        "required": true,
+        "order": 16,
+        "options": [
+            {"value": "first_year_group", "label": "Через группу первокурсников"},
+            {"value": "coordinator", "label": "Через координатора"},
+            {"value": "classmate", "label": "Через старосту / одногруппников"},
+            {"value": "official_sources", "label": "Через официальные источники вуза"},
+            {"value": "dean_email", "label": "Через рассылку деканата на почту"},
+            {"value": "class_presentation", "label": "Через выступления на парах ССт"},
+            {"value": "friends_family", "label": "Через друзей / родных, которые уже были или есть в ССт"},
+            {"value": "printed_materials", "label": "Через печатную продукцию в корпусе"}
+        ]
+    }
+]

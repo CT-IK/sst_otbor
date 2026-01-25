@@ -1,0 +1,44 @@
+[
+    {
+        "id": "q1",
+        "text": "Почему вы хотите вступить в студсовет?",
+        "type": "text",
+        "required": true,
+        "order": 1,
+        "max_length": 500
+    },
+    {
+        "id": "q2",
+        "text": "Какой у вас курс?",
+        "type": "choice",
+        "required": true,
+        "order": 2,
+        "options": [
+            {"value": "1", "label": "1 курс"},
+            {"value": "2", "label": "2 курс"},
+            {"value": "3", "label": "3 курс"},
+            {"value": "4", "label": "4 курс"}
+        ]
+    },
+    {
+        "id": "q3",
+        "text": "Какие направления вас интересуют?",
+        "type": "multiple_choice",
+        "required": false,
+        "order": 3,
+        "options": [
+            {"value": "opt_1", "label": "Организация мероприятий"},
+            {"value": "opt_2", "label": "Работа со студентами"},
+            {"value": "opt_3", "label": "Административная работа"}
+        ]
+    },
+    {
+        "id": "q4",
+        "text": "Оцените свой опыт участия в студенческих организациях (1-10)",
+        "type": "number",
+        "required": true,
+        "order": 4,
+        "min_value": 1,
+        "max_value": 10
+    }
+]
