@@ -37,11 +37,17 @@ html, body {
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     scroll-behavior: auto; /* Отключаем плавную прокрутку */
+    overflow-x: hidden; /* Предотвращаем горизонтальную прокрутку */
 }
 
 /* Предотвращаем автоматическую прокрутку при фокусе */
-input, textarea {
-    scroll-margin: 0;
+input, textarea, label {
+    scroll-margin: 0 !important;
+    scroll-padding: 0 !important;
+}
+
+label.option-item input:focus {
+    outline: none;
 }
 
 body {
