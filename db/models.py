@@ -92,6 +92,7 @@ class Administrator(Base):
 
     faculty = relationship("Faculty", back_populates="administrators", lazy="joined")
     slot_availability = relationship("SlotAvailability", back_populates="interviewer", cascade="all, delete-orphan")
+    time_slot_availability = relationship("TimeSlotAvailability", back_populates="interviewer", cascade="all, delete-orphan")
 
 
 class Faculty(Base):
