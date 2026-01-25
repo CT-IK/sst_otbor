@@ -12,6 +12,7 @@ import hashlib
 import secrets
 import csv
 import io
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -27,6 +28,7 @@ from db.models import (
 )
 
 router = APIRouter(prefix="/admin")
+logger = logging.getLogger(__name__)
 
 
 # === Проверка прав админа ===
@@ -116,7 +118,7 @@ class FacultyStats(BaseModel):
     # По статусам
     pending_count: int = Field(description="Ожидают проверки")
     approved_count: int = Field(description="Одобрено")
-    rejected_count: int = Field(description="Отклонено")
+    exported_to_sheet_count: int = Field(description="Количество анкет в Google таблице")
     
     # По датам (последние 14 дней)
     daily_submissions: list[DailyStats] = Field(description="Заявки по дням")
@@ -191,7 +193,16 @@ async def get_faculty_stats(
     
     pending_count = status_counts.get(SubmissionStatus.SUBMITTED, 0)
     approved_count = status_counts.get(SubmissionStatus.APPROVED, 0)
-    rejected_count = status_counts.get(SubmissionStatus.REJECTED, 0)
+    
+    # Количество в Google таблице (вместо rejected_count)
+    exported_to_sheet_count = 0
+    if faculty.google_sheet_url:
+        try:
+            from app.services.google_sheets_service import google_sheets_service
+            exported_to_sheet_count = google_sheets_service.get_exported_count(faculty.google_sheet_url)
+        except Exception as e:
+            logger.error(f"Ошибка при получении количества из Google таблицы: {e}")
+            exported_to_sheet_count = 0
     
     # По датам (последние 14 дней)
     fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
@@ -223,7 +234,7 @@ async def get_faculty_stats(
         total_users=total_users,
         pending_count=pending_count,
         approved_count=approved_count,
-        rejected_count=rejected_count,
+        exported_to_sheet_count=exported_to_sheet_count,
         daily_submissions=daily_submissions,
         current_stage=faculty.current_stage.value if faculty.current_stage else None,
         stage_status=faculty.stage_status.value if faculty.stage_status else None,

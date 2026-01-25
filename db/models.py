@@ -120,6 +120,9 @@ class Faculty(Base):
     video_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # ID группового чата для видео
     video_submission_open: Mapped[bool] = mapped_column(Boolean, default=False)  # Открыт ли приём видео
     
+    # Настройки для экспорта в Google Sheets
+    google_sheet_url: Mapped[str | None] = mapped_column(String(500), nullable=True)  # Ссылка на Google таблицу для экспорта
+    
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     users = relationship("User", back_populates="faculty")

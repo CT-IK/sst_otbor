@@ -117,20 +117,26 @@ DEBUG:
         try {
             const adminCheck = await api(`/admin/check/${state.facultyId}`);
             
-        if (adminCheck.is_admin) {
-            // Сохраняем роль админа (head_admin или reviewer)
-            state.adminRole = adminCheck.role || null;
-            console.log('Admin role detected:', state.adminRole);
-            // Админ — показываем статистику
-            await loadAdminStats();
-        } else {
+            if (adminCheck.is_admin) {
+                // Сохраняем роль админа (head_admin или reviewer)
+                state.adminRole = adminCheck.role || null;
+                console.log('Admin role detected:', state.adminRole);
+                // Админ — показываем статистику
+                await loadAdminStats();
+            } else {
                 // Обычный пользователь — показываем анкету
                 await loadQuestionnaire();
             }
         } catch (error) {
             // Если ошибка проверки админа, показываем анкету
-            console.log('Admin check failed, showing questionnaire:', error);
-            await loadQuestionnaire();
+            console.error('Admin check failed:', error);
+            try {
+                await loadQuestionnaire();
+            } catch (questionnaireError) {
+                // Если и анкета не загрузилась, показываем ошибку
+                console.error('Questionnaire load also failed:', questionnaireError);
+                showError(`Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}`);
+            }
         }
         
         // Предотвращаем стандартное поведение формы (чтобы не было прокрутки)
@@ -211,27 +217,41 @@ function applyTelegramTheme() {
 
 // === API вызовы ===
 async function api(endpoint, options = {}) {
-    const url = new URL(`${CONFIG.API_URL}${endpoint}`);
-    
-    // Добавляем telegram_id как query параметр
-    url.searchParams.set('telegram_id', state.telegramId);
-    
-    const response = await fetch(url, {
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        ...options,
-    });
-    
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.detail || `HTTP ${response.status}`);
+    try {
+        const url = new URL(`${CONFIG.API_URL}${endpoint}`);
+        
+        // Добавляем telegram_id как query параметр
+        url.searchParams.set('telegram_id', state.telegramId);
+        
+        console.log('API request:', url.toString());
+        
+        const response = await fetch(url, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            ...options,
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            const errorMessage = error.detail || error.message || `HTTP ${response.status}`;
+            console.error('API error:', url.toString(), response.status, errorMessage);
+            throw new Error(errorMessage);
+        }
+        
+        // 204 No Content
+        if (response.status === 204) return null;
+        
+        return await response.json();
+    } catch (error) {
+        // Если это уже наша ошибка, пробрасываем дальше
+        if (error.message && error.message.startsWith('HTTP')) {
+            throw error;
+        }
+        // Если это сетевая ошибка или другая, оборачиваем
+        console.error('API fetch error:', endpoint, error);
+        throw new Error(`Ошибка соединения: ${error.message || 'Не удалось подключиться к серверу'}`);
     }
-    
-    // 204 No Content
-    if (response.status === 204) return null;
-    
-    return response.json();
 }
 
 // === Загрузка анкеты ===
@@ -311,8 +331,8 @@ async function loadAdminStats() {
         
     } catch (error) {
         console.error('Admin stats error:', error);
-        // Если ошибка — показываем обычную анкету
-        await loadQuestionnaire();
+        // Если ошибка — показываем ошибку, а не анкету (админ не должен видеть анкету)
+        showError(`Ошибка загрузки статистики: ${error.message || 'Неизвестная ошибка'}`);
     }
 }
 
@@ -321,42 +341,51 @@ function renderAdminStats(stats) {
     const container = document.getElementById('admin-stats-content');
     if (!container) return;
     
-    // График по дням
-    const maxCount = Math.max(...stats.daily_submissions.map(d => d.count), 1);
-    const chartBars = stats.daily_submissions.map(d => {
-        const height = (d.count / maxCount) * 100;
+    // Проверяем наличие данных
+    if (!stats) {
+        container.innerHTML = '<p>Ошибка: данные статистики не получены</p>';
+        return;
+    }
+    
+    // График по дням (с проверкой на пустой массив)
+    const dailySubmissions = stats.daily_submissions || [];
+    const maxCount = dailySubmissions.length > 0 
+        ? Math.max(...dailySubmissions.map(d => d.count || 0), 1)
+        : 1;
+    const chartBars = dailySubmissions.map(d => {
+        const height = (d.count || 0) / maxCount * 100;
         return `
             <div class="chart-bar-wrapper">
                 <div class="chart-bar" style="height: ${height}%">
                     <span class="chart-value">${d.count || ''}</span>
                 </div>
-                <span class="chart-label">${d.date}</span>
+                <span class="chart-label">${d.date || ''}</span>
             </div>
         `;
     }).join('');
     
     container.innerHTML = `
         <div class="stats-header">
-            <h1>📊 ${stats.faculty_name}</h1>
+            <h1>📊 ${stats.faculty_name || 'Факультет'}</h1>
             <p class="stats-subtitle">Статистика анкет</p>
         </div>
         
         <div class="stats-cards">
             <div class="stat-card primary">
-                <div class="stat-value">${stats.total_submissions}</div>
+                <div class="stat-value">${stats.total_submissions || 0}</div>
                 <div class="stat-label">Всего анкет</div>
             </div>
             <div class="stat-card success">
-                <div class="stat-value">${stats.approved_count}</div>
+                <div class="stat-value">${stats.approved_count || 0}</div>
                 <div class="stat-label">Одобрено</div>
             </div>
             <div class="stat-card warning">
-                <div class="stat-value">${stats.pending_count}</div>
+                <div class="stat-value">${stats.pending_count || 0}</div>
                 <div class="stat-label">На проверке</div>
             </div>
             <div class="stat-card danger">
-                <div class="stat-value">${stats.rejected_count}</div>
-                <div class="stat-label">Отклонено</div>
+                <div class="stat-value">${stats.exported_to_sheet_count || 0}</div>
+                <div class="stat-label">В Google таблице</div>
             </div>
         </div>
         
@@ -379,7 +408,7 @@ function renderAdminStats(stats) {
             </div>
             <div class="info-row">
                 <span>Всего пользователей:</span>
-                <span>${stats.total_users}</span>
+                <span>${stats.total_users || 0}</span>
             </div>
         </div>
         

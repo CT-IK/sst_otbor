@@ -410,8 +410,45 @@
                     <div class="value" id="stat-pending">—</div>
                 </div>
                 <div class="stat-card danger">
-                    <div class="label">Отклонено</div>
-                    <div class="value" id="stat-rejected">—</div>
+                    <div class="label">В Google таблице</div>
+                    <div class="value" id="stat-exported">—</div>
+                </div>
+            </div>
+            
+            <!-- Google Sheets Export -->
+            <div class="google-sheets-section" style="margin: 24px 0; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+                <h3 style="margin: 0 0 16px 0; font-size: 18px;">📊 Экспорт в Google Таблицу</h3>
+                
+                <div style="margin-bottom: 16px;">
+                    <label for="sheet-url" style="display: block; margin-bottom: 8px; font-weight: 500;">Ссылка на Google таблицу:</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input 
+                            type="text" 
+                            id="sheet-url" 
+                            placeholder="https://docs.google.com/spreadsheets/d/..." 
+                            style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;"
+                        />
+                        <button 
+                            id="save-sheet-url-btn" 
+                            class="btn btn-primary"
+                            style="padding: 10px 20px; white-space: nowrap;"
+                        >
+                            Сохранить
+                        </button>
+                    </div>
+                    <div id="sheet-url-status" style="margin-top: 8px; font-size: 13px; color: #666;"></div>
+                </div>
+                
+                <div>
+                    <button 
+                        id="export-btn" 
+                        class="btn btn-success"
+                        style="width: 100%; padding: 12px; font-size: 16px;"
+                        disabled
+                    >
+                        📤 Экспортировать анкеты в Google таблицу
+                    </button>
+                    <div id="export-status" style="margin-top: 12px; font-size: 13px;"></div>
                 </div>
             </div>
             
@@ -582,7 +619,7 @@
                 document.getElementById('stat-total').textContent = stats.total_submissions;
                 document.getElementById('stat-approved').textContent = stats.approved_count;
                 document.getElementById('stat-pending').textContent = stats.pending_count;
-                document.getElementById('stat-rejected').textContent = stats.rejected_count;
+                document.getElementById('stat-exported').textContent = stats.exported_to_sheet_count || 0;
                 
                 // Load responses
                 const respResp = await fetch(
@@ -597,6 +634,9 @@
                 document.getElementById('table-count').textContent = `Всего: ${data.total}`;
                 
                 renderTable();
+                
+                // Load Google Sheets settings
+                await loadGoogleSheetsSettings();
                 
                 loading.style.display = 'none';
                 tableWrapper.style.display = 'block';
@@ -736,6 +776,117 @@
             div.textContent = text;
             return div.innerHTML;
         }
+        
+        // Google Sheets functions
+        async function loadGoogleSheetsSettings() {
+            try {
+                const resp = await fetch(
+                    `${API_URL}/admin/google-sheets/${facultyId}/sheet-url?telegram_id=${telegramId}`
+                );
+                if (!resp.ok) throw new Error('Ошибка загрузки настроек');
+                const data = await resp.json();
+                
+                const urlInput = document.getElementById('sheet-url');
+                const exportBtn = document.getElementById('export-btn');
+                const statusDiv = document.getElementById('sheet-url-status');
+                
+                if (data.success && data.sheet_url) {
+                    urlInput.value = data.sheet_url;
+                    exportBtn.disabled = false;
+                    statusDiv.textContent = '✅ Ссылка настроена';
+                    statusDiv.style.color = '#22c55e';
+                } else {
+                    urlInput.value = '';
+                    exportBtn.disabled = true;
+                    statusDiv.textContent = '⚠️ Ссылка не настроена. Укажите ссылку на Google таблицу и нажмите "Сохранить"';
+                    statusDiv.style.color = '#f59e0b';
+                }
+            } catch (e) {
+                console.error('Ошибка загрузки настроек Google Sheets:', e);
+            }
+        }
+        
+        document.getElementById('save-sheet-url-btn').addEventListener('click', async () => {
+            const urlInput = document.getElementById('sheet-url');
+            const statusDiv = document.getElementById('sheet-url-status');
+            const exportBtn = document.getElementById('export-btn');
+            
+            const url = urlInput.value.trim();
+            if (!url) {
+                statusDiv.textContent = '❌ Введите ссылку на Google таблицу';
+                statusDiv.style.color = '#ef4444';
+                return;
+            }
+            
+            try {
+                statusDiv.textContent = '⏳ Сохранение...';
+                statusDiv.style.color = '#666';
+                
+                const resp = await fetch(
+                    `${API_URL}/admin/google-sheets/${facultyId}/sheet-url?telegram_id=${telegramId}`,
+                    {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sheet_url: url })
+                    }
+                );
+                
+                if (!resp.ok) {
+                    const error = await resp.json();
+                    throw new Error(error.detail || 'Ошибка сохранения');
+                }
+                
+                const data = await resp.json();
+                statusDiv.textContent = '✅ ' + data.message;
+                statusDiv.style.color = '#22c55e';
+                exportBtn.disabled = false;
+            } catch (e) {
+                statusDiv.textContent = '❌ ' + e.message;
+                statusDiv.style.color = '#ef4444';
+            }
+        });
+        
+        document.getElementById('export-btn').addEventListener('click', async () => {
+            const statusDiv = document.getElementById('export-status');
+            const exportBtn = document.getElementById('export-btn');
+            
+            try {
+                exportBtn.disabled = true;
+                statusDiv.textContent = '⏳ Экспорт в процессе...';
+                statusDiv.style.color = '#666';
+                
+                const resp = await fetch(
+                    `${API_URL}/admin/google-sheets/${facultyId}/export?telegram_id=${telegramId}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ force_export_all: false })
+                    }
+                );
+                
+                if (!resp.ok) {
+                    const error = await resp.json();
+                    throw new Error(error.detail || 'Ошибка экспорта');
+                }
+                
+                const data = await resp.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = `✅ ${data.message}`;
+                    statusDiv.style.color = '#22c55e';
+                    // Обновляем статистику
+                    await loadData();
+                } else {
+                    statusDiv.textContent = '❌ ' + (data.error || 'Ошибка экспорта');
+                    statusDiv.style.color = '#ef4444';
+                }
+            } catch (e) {
+                statusDiv.textContent = '❌ ' + e.message;
+                statusDiv.style.color = '#ef4444';
+            } finally {
+                exportBtn.disabled = false;
+            }
+        });
     </script>
 </body>
 </html>

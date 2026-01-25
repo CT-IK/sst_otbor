@@ -89,5 +89,26 @@ services:
       - internal
       - infra_net  # Для доступа к pgbouncer
 
+  # pgAdmin для управления базой данных
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sst_pgadmin
+    restart: always
+    environment:
+      # Настройки pgAdmin
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
+      # Отключаем предупреждения о пароле по умолчанию (для продакшена установите свой пароль!)
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - infra_net  # Для доступа к PostgreSQL
+    ports:
+      - "5050:80"  # Доступ к pgAdmin через http://localhost:5050
+    # Если нужно ограничить доступ только через nginx, уберите ports и добавьте в nginx конфиг
+
 volumes:
   redis_data:
+  pgadmin_data:
