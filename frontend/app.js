@@ -133,6 +133,14 @@ DEBUG:
             await loadQuestionnaire();
         }
         
+        // Предотвращаем стандартное поведение формы (чтобы не было прокрутки)
+        if (elements.form) {
+            elements.form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                return false;
+            });
+        }
+        
     } catch (error) {
         console.error('Init error:', error);
         showError(error.message);
@@ -637,11 +645,31 @@ function createChoiceInput(question) {
         input.value = option.value;
         input.checked = state.answers[question.id] === option.value;
         
-        input.addEventListener('change', () => {
+        input.addEventListener('change', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             // Убираем selected у всех
             wrapper.querySelectorAll('.option-item').forEach(el => el.classList.remove('selected'));
             item.classList.add('selected');
             updateAnswer(question.id, option.value);
+        });
+        
+        // Предотвращаем прокрутку при клике на label
+        item.addEventListener('click', (e) => {
+            // Если клик не на самом input, предотвращаем стандартное поведение
+            if (e.target !== input) {
+                e.preventDefault();
+            }
+        });
+        
+        // Предотвращаем прокрутку при фокусе на input
+        input.addEventListener('focus', (e) => {
+            // Сохраняем текущую позицию прокрутки
+            const scrollY = window.scrollY;
+            // Небольшая задержка, чтобы предотвратить прокрутку браузера
+            setTimeout(() => {
+                window.scrollTo(0, scrollY);
+            }, 0);
         });
         
         const radio = document.createElement('span');
@@ -678,7 +706,9 @@ function createMultipleChoiceInput(question) {
         input.value = option.value;
         input.checked = currentValue.includes(option.value);
         
-        input.addEventListener('change', () => {
+        input.addEventListener('change', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             item.classList.toggle('selected', input.checked);
             
             // Собираем все выбранные
@@ -687,6 +717,24 @@ function createMultipleChoiceInput(question) {
                 selected.push(el.value);
             });
             updateAnswer(question.id, selected);
+        });
+        
+        // Предотвращаем прокрутку при клике на label
+        item.addEventListener('click', (e) => {
+            // Если клик не на самом input, предотвращаем стандартное поведение
+            if (e.target !== input) {
+                e.preventDefault();
+            }
+        });
+        
+        // Предотвращаем прокрутку при фокусе на input
+        input.addEventListener('focus', (e) => {
+            // Сохраняем текущую позицию прокрутки
+            const scrollY = window.scrollY;
+            // Небольшая задержка, чтобы предотвратить прокрутку браузера
+            setTimeout(() => {
+                window.scrollTo(0, scrollY);
+            }, 0);
         });
         
         const checkbox = document.createElement('span');
