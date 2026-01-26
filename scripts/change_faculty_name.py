@@ -6,7 +6,12 @@
   docker compose -f docker-compose.prod.yml exec backend python scripts/change_faculty_name.py <id> "Новое название"
 """
 import sys
+import os
 import asyncio
+
+# Добавляем корень проекта в путь
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from db.session import async_session_maker
 from db.models import Faculty
 from sqlalchemy import select
