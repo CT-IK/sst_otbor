@@ -208,6 +208,13 @@ async def callback_send_broadcast(callback: CallbackQuery, state: FSMContext, bo
         return
     
     data = await state.get_data()
+    
+    # Дополнительная проверка безопасности: убеждаемся, что админ отправляет только своему факультету
+    if data.get('faculty_id') != admin.faculty_id:
+        await callback.answer("Ошибка: попытка отправить рассылку другому факультету", show_alert=True)
+        await state.clear()
+        return
+    
     await state.clear()
     
     filter_info = ""
@@ -304,6 +311,13 @@ async def callback_broadcast_filter_select(callback: CallbackQuery, state: FSMCo
     admin = await get_head_admin(callback.from_user.id)
     if not admin:
         await callback.answer("Нет доступа", show_alert=True)
+        return
+    
+    # Проверяем, что в state нет попытки работать с другим факультетом
+    existing_data = await state.get_data()
+    if existing_data.get('faculty_id') and existing_data.get('faculty_id') != admin.faculty_id:
+        await callback.answer("Ошибка доступа", show_alert=True)
+        await state.clear()
         return
     
     filter_type = callback.data.split(":")[1]
