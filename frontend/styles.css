@@ -321,9 +321,18 @@ body {
     transition: all 0.2s ease;
     border: 2px solid transparent;
     position: relative;
+    user-select: none;
+    -webkit-user-select: none;
     /* Предотвращаем прокрутку при клике */
     scroll-margin: 0 !important;
     scroll-padding: 0 !important;
+    /* Убираем outline при фокусе (для клавиатурной навигации) */
+    outline: none;
+}
+
+.option-item:focus {
+    outline: 2px solid var(--tg-theme-button-color);
+    outline-offset: 2px;
 }
 
 .option-item:active {
@@ -338,14 +347,15 @@ body {
 .option-item input {
     position: absolute;
     opacity: 0;
-    width: 0;
-    height: 0;
+    width: 1px;
+    height: 1px;
     margin: 0;
     padding: 0;
     border: 0;
-    pointer-events: none;
+    /* НЕ используем pointer-events: none - это блокирует клики! */
     /* Предотвращаем прокрутку при фокусе */
     scroll-margin: 0 !important;
+    scroll-padding: 0 !important;
 }
 
 .option-radio,
