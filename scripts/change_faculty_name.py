@@ -46,14 +46,19 @@ async def update_faculty(faculty_id: int, new_name: str):
             print(f"❌ Факультет с ID={faculty_id} не найден!")
             return False
         
+        # Сохраняем старое название ДО изменения
         old_name = faculty.name
+        faculty_id_value = faculty.id
+        
+        # Изменяем название
         faculty.name = new_name
         await db.commit()
         
+        # Выводим результат (используем сохранённые значения, не обращаемся к объекту после commit)
         print(f"✅ Название успешно изменено!")
-        print(f"   ID: {faculty.id}")
+        print(f"   ID: {faculty_id_value}")
         print(f"   Было: {old_name}")
-        print(f"   Стало: {faculty.name}")
+        print(f"   Стало: {new_name}")
         return True
 
 
