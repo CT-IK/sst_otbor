@@ -222,7 +222,8 @@ class GoogleSheetsService:
         sheet_url: str,
         questionnaires: List[Dict[str, Any]],
         questions: List[Dict[str, Any]],
-        faculty_name: str
+        faculty_name: str,
+        force_export_all: bool = False
     ) -> Dict[str, Any]:
         """
         Экспортировать анкеты в Google таблицу.
@@ -257,8 +258,19 @@ class GoogleSheetsService:
             # Получаем или создаём лист отслеживания
             tracking_sheet = self._get_or_create_tracking_sheet(spreadsheet)
             
-            # Получаем уже выгруженных пользователей
-            exported_ids = self._get_exported_user_ids(tracking_sheet)
+            # Если force_export_all, очищаем всё и начинаем заново
+            if force_export_all:
+                logger.info("Принудительный экспорт: очищаем таблицу и лист отслеживания")
+                main_sheet.clear()
+                # Очищаем лист отслеживания (оставляем только заголовки)
+                tracking_values = tracking_sheet.get_all_values()
+                if len(tracking_values) > 1:
+                    # Удаляем все строки кроме заголовка
+                    tracking_sheet.delete_rows(2, len(tracking_values))
+                exported_ids = set()
+            else:
+                # Получаем уже выгруженных пользователей
+                exported_ids = self._get_exported_user_ids(tracking_sheet)
             
             # Подготавливаем заголовки
             headers = [

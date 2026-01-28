@@ -71,7 +71,8 @@ async def get_or_create_user(
         # Автоматически создаём пользователя
         user = User(
             telegram_id=telegram_id,
-            first_name="Участник",  # Будет обновлено при заполнении анкеты
+            # Имя возьмём из ответов анкеты при первом сабмите
+            first_name="",
             faculty_id=faculty_id,
         )
         db.add(user)

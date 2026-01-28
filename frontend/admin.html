@@ -440,6 +440,16 @@
                 </div>
                 
                 <div>
+                    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer;">
+                        <input 
+                            type="checkbox" 
+                            id="force-export-checkbox"
+                            style="width: 18px; height: 18px; cursor: pointer;"
+                        />
+                        <span style="font-size: 14px; color: #666;">
+                            Принудительно экспортировать все анкеты (очистить таблицу и переэкспортировать всё заново)
+                        </span>
+                    </label>
                     <button 
                         id="export-sheets-btn" 
                         class="btn btn-success"
@@ -849,18 +859,24 @@
         document.getElementById('export-sheets-btn').addEventListener('click', async () => {
             const statusDiv = document.getElementById('export-status');
             const exportBtn = document.getElementById('export-sheets-btn');
+            const forceExportCheckbox = document.getElementById('force-export-checkbox');
             
             try {
                 exportBtn.disabled = true;
                 statusDiv.textContent = '⏳ Экспорт в процессе...';
                 statusDiv.style.color = '#666';
                 
+                const forceExportAll = forceExportCheckbox.checked;
+                if (forceExportAll) {
+                    statusDiv.textContent = '⏳ Принудительный экспорт: очищаем таблицу и экспортируем всё заново...';
+                }
+                
                 const resp = await fetch(
                     `${API_URL}/admin/google-sheets/${facultyId}/export?telegram_id=${telegramId}`,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ force_export_all: false })
+                        body: JSON.stringify({ force_export_all: forceExportAll })
                     }
                 );
                 

@@ -189,8 +189,27 @@ async def export_questionnaires(
     # Формируем данные для экспорта
     questionnaires_data = []
     for questionnaire, user in rows:
-        # Формируем имя пользователя
-        user_name = f"{user.first_name or ''} {user.surname or ''}".strip()
+        # Формируем ФИО пользователя:
+        # 1) сначала пробуем взять из ответов анкеты (questions.json: surname, first_name, middle_name)
+        # 2) если там пусто — используем поля User из БД
+        answers = questionnaire.answers or {}
+        first_name = (
+            answers.get("first_name")
+            or user.first_name
+            or ""
+        )
+        middle_name = (
+            answers.get("middle_name")
+            or getattr(user, "second_name", None)
+            or ""
+        )
+        surname = (
+            answers.get("surname")
+            or user.surname
+            or ""
+        )
+        # Собираем "Имя Отчество Фамилия" (без лишних пробелов)
+        user_name = " ".join(part for part in [first_name, middle_name, surname] if part).strip()
         if not user_name:
             user_name = f"User {user.telegram_id}"
         
@@ -202,15 +221,13 @@ async def export_questionnaires(
             'answers': questionnaire.answers,
         })
     
-    # Если force_export_all, очищаем лист отслеживания (но это не реализовано в сервисе)
-    # Пока просто экспортируем как обычно
-    
     # Экспортируем
     export_result = google_sheets_service.export_questionnaires(
         sheet_url=faculty.google_sheet_url,
         questionnaires=questionnaires_data,
         questions=questions,
-        faculty_name=faculty.name
+        faculty_name=faculty.name,
+        force_export_all=data.force_export_all
     )
     
     if export_result['success']:
