@@ -3,6 +3,7 @@
 Экспорт данных анкет в Google таблицы.
 """
 import re
+import json
 import logging
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -200,7 +201,7 @@ class GoogleSheetsService:
         ]
         
         # Добавляем ответы на вопросы в порядке вопросов
-        answers = questionnaire.get('answers', {})
+        answers = questionnaire.get('answers', {}) or {}
         for question in questions:
             qid = str(question['id'])
             answer_value = answers.get(qid, '')
@@ -215,6 +216,15 @@ class GoogleSheetsService:
             
             row.append(answer)
         
+        # В конец добавляем сырой JSON всех ответов
+        try:
+            raw_json = json.dumps(answers, ensure_ascii=False)
+        except TypeError:
+            # На всякий случай, если там что-то несерилизуемое,
+            # приводим к строке.
+            raw_json = str(answers)
+        row.append(raw_json)
+
         return row
     
     def export_questionnaires(
@@ -272,14 +282,16 @@ class GoogleSheetsService:
                 # Получаем уже выгруженных пользователей
                 exported_ids = self._get_exported_user_ids(tracking_sheet)
             
-            # Подготавливаем заголовки
+        # Подготавливаем заголовки
             headers = [
                 "ID пользователя",
                 "Telegram ID",
                 "Имя",
-                "Дата отправки"
+            "Дата отправки"
             ]
             headers.extend([q.get('text', f"Вопрос {q['id']}")[:50] for q in questions])
+        # Дополнительно: сырой JSON ответов целиком
+        headers.append("Raw JSON ответов")
             
             # Проверяем, есть ли уже заголовки
             existing_headers = main_sheet.row_values(1) if main_sheet.row_values(1) else []
