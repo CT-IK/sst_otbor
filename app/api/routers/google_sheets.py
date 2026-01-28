@@ -89,7 +89,9 @@ async def set_sheet_url(
     return SetSheetUrlResponse(
         success=True,
         message="Ссылка на Google таблицу успешно сохранена",
-        sheet_url=faculty.google_sheet_url
+        # После commit() объект может быть "expired", и доступ к атрибутам
+        # вызовет ленивую подзагрузку (в async это может упасть MissingGreenlet).
+        sheet_url=data.sheet_url
     )
 
 
