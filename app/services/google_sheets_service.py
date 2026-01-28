@@ -259,28 +259,17 @@ class GoogleSheetsService:
             spreadsheet_id = self._extract_spreadsheet_id(sheet_url)
             spreadsheet = client.open_by_key(spreadsheet_id)
             
-            # Получаем или создаём основной лист
-            try:
-                main_sheet = spreadsheet.sheet1  # Первый лист
-            except Exception:
-                main_sheet = spreadsheet.add_worksheet(title="Анкеты", rows=1000, cols=20)
-            
-            # Получаем или создаём лист отслеживания
-            tracking_sheet = self._get_or_create_tracking_sheet(spreadsheet)
+            # Используем один лист "Выгруженные" как основной
+            main_sheet = self._get_or_create_tracking_sheet(spreadsheet)
             
             # Если force_export_all, очищаем всё и начинаем заново
             if force_export_all:
-                logger.info("Принудительный экспорт: очищаем таблицу и лист отслеживания")
+                logger.info("Принудительный экспорт: очищаем лист 'Выгруженные'")
                 main_sheet.clear()
-                # Очищаем лист отслеживания (оставляем только заголовки)
-                tracking_values = tracking_sheet.get_all_values()
-                if len(tracking_values) > 1:
-                    # Удаляем все строки кроме заголовка
-                    tracking_sheet.delete_rows(2, len(tracking_values))
                 exported_ids = set()
             else:
-                # Получаем уже выгруженных пользователей
-                exported_ids = self._get_exported_user_ids(tracking_sheet)
+                # Получаем уже выгруженных пользователей по первому столбцу
+                exported_ids = self._get_exported_user_ids(main_sheet)
             
             # Подготавливаем заголовки
             headers = [
@@ -316,23 +305,13 @@ class GoogleSheetsService:
                 # Подготавливаем данные
                 row_data = self._prepare_questionnaire_data(questionnaire, questions)
                 
-                # Добавляем строку в основную таблицу
+                # Добавляем строку в основной лист (он же 'Выгруженные')
                 main_sheet.append_row(row_data)
-                
-                # Добавляем запись в лист отслеживания
-                from datetime import datetime
-                tracking_sheet.append_row([
-                    user_id,
-                    questionnaire.get('telegram_id', ''),
-                    questionnaire.get('user_name', '').split()[0] if questionnaire.get('user_name') else '',
-                    questionnaire.get('user_name', '').split()[-1] if questionnaire.get('user_name') else '',
-                    datetime.now().strftime('%d.%m.%Y %H:%M')
-                ])
                 
                 exported_count += 1
                 exported_ids.add(user_id)  # Добавляем в кэш
             
-            # Подсчитываем общее количество в таблице
+            # Подсчитываем общее количество в таблице (строки минус заголовок)
             total_in_sheet = len(main_sheet.get_all_values()) - 1  # Минус заголовок
             
             logger.info(
@@ -388,8 +367,8 @@ class GoogleSheetsService:
             spreadsheet_id = self._extract_spreadsheet_id(sheet_url)
             spreadsheet = client.open_by_key(spreadsheet_id)
             
-            # Получаем основной лист
-            main_sheet = spreadsheet.sheet1
+            # Получаем лист 'Выгруженные' (или создаём)
+            main_sheet = self._get_or_create_tracking_sheet(spreadsheet)
             all_values = main_sheet.get_all_values()
             
             # Количество строк минус заголовок
