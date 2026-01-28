@@ -282,16 +282,16 @@ class GoogleSheetsService:
                 # Получаем уже выгруженных пользователей
                 exported_ids = self._get_exported_user_ids(tracking_sheet)
             
-        # Подготавливаем заголовки
+            # Подготавливаем заголовки
             headers = [
                 "ID пользователя",
                 "Telegram ID",
                 "Имя",
-            "Дата отправки"
+                "Дата отправки",
             ]
             headers.extend([q.get('text', f"Вопрос {q['id']}")[:50] for q in questions])
-        # Дополнительно: сырой JSON ответов целиком
-        headers.append("Raw JSON ответов")
+            # Дополнительно: сырой JSON ответов целиком
+            headers.append("Raw JSON ответов")
             
             # Проверяем, есть ли уже заголовки
             existing_headers = main_sheet.row_values(1) if main_sheet.row_values(1) else []
