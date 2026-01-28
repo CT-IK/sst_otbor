@@ -383,7 +383,7 @@
             <div class="header">
                 <h1>📊 Ответы: <span class="faculty-name" id="faculty-name">—</span></h1>
                 <div class="header-actions">
-                    <a href="#" class="btn btn-secondary" id="export-btn">
+                    <a href="#" class="btn btn-secondary" id="export-csv-btn">
                         📥 Скачать CSV
                     </a>
                     <button class="btn btn-secondary" onclick="loadData()">
@@ -441,7 +441,7 @@
                 
                 <div>
                     <button 
-                        id="export-btn" 
+                        id="export-sheets-btn" 
                         class="btn btn-success"
                         style="width: 100%; padding: 12px; font-size: 16px;"
                         disabled
@@ -526,7 +526,7 @@
             document.getElementById('main-section').style.display = 'block';
             
             // Update export link
-            document.getElementById('export-btn').href = 
+            document.getElementById('export-csv-btn').href = 
                 `${API_URL}/admin/export/${facultyId}?telegram_id=${telegramId}`;
         }
         
@@ -787,7 +787,7 @@
                 const data = await resp.json();
                 
                 const urlInput = document.getElementById('sheet-url');
-                const exportBtn = document.getElementById('export-btn');
+                const exportBtn = document.getElementById('export-sheets-btn');
                 const statusDiv = document.getElementById('sheet-url-status');
                 
                 if (data.success && data.sheet_url) {
@@ -809,7 +809,7 @@
         document.getElementById('save-sheet-url-btn').addEventListener('click', async () => {
             const urlInput = document.getElementById('sheet-url');
             const statusDiv = document.getElementById('sheet-url-status');
-            const exportBtn = document.getElementById('export-btn');
+            const exportBtn = document.getElementById('export-sheets-btn');
             
             const url = urlInput.value.trim();
             if (!url) {
@@ -846,9 +846,9 @@
             }
         });
         
-        document.getElementById('export-btn').addEventListener('click', async () => {
+        document.getElementById('export-sheets-btn').addEventListener('click', async () => {
             const statusDiv = document.getElementById('export-status');
-            const exportBtn = document.getElementById('export-btn');
+            const exportBtn = document.getElementById('export-sheets-btn');
             
             try {
                 exportBtn.disabled = true;
