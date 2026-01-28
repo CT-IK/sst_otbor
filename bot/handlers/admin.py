@@ -111,18 +111,31 @@ async def callback_stats(callback: CallbackQuery):
             status_name = f.stage_status.value if f.stage_status else "—"
             faculty_stats += f"\n  • {f.name}: {stage_name} ({status_name})"
     
-    await callback.message.edit_text(
+    text = (
         f"📊 <b>Статистика</b>\n\n"
         f"👥 Пользователей: {users_count}\n"
         f"📝 Анкет отправлено: {questionnaires_count}\n"
         f"⏳ Ожидают проверки: {pending_count}\n\n"
-        f"<b>Факультеты:</b>{faculty_stats or ' нет'}",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 Обновить", callback_data="admin:stats")],
-            [InlineKeyboardButton(text="« Назад", callback_data="admin:back")],
-        ])
+        f"<b>Факультеты:</b>{faculty_stats or ' нет'}"
     )
-    await callback.answer()
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Обновить", callback_data="admin:stats")],
+        [InlineKeyboardButton(text="« Назад", callback_data="admin:back")],
+    ])
+
+    try:
+        if callback.message:
+            await callback.message.edit_text(text, reply_markup=markup)
+        else:
+            # На всякий случай (например, inline callback без message)
+            await callback.bot.send_message(callback.from_user.id, text, reply_markup=markup)
+    except TelegramBadRequest as e:
+        # Самое частое: нажали "Обновить", а текст/кнопки не изменились.
+        if "message is not modified" not in str(e).lower():
+            await callback.answer(f"Ошибка Telegram: {e}", show_alert=True)
+            return
+    finally:
+        await callback.answer()
 
 
 @admin_router.callback_query(F.data == "admin:stages")

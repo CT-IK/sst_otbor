@@ -73,19 +73,41 @@ class GoogleSheetsService:
         Returns:
             ID таблицы
         """
-        # Паттерны для разных форматов URL
-        patterns = [
-            r'/spreadsheets/d/([a-zA-Z0-9-_]+)',
-            r'id=([a-zA-Z0-9-_]+)',
-            r'([a-zA-Z0-9-_]{44})',  # Прямой ID (44 символа)
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
-        
-        raise ValueError(f"Не удалось извлечь ID таблицы из URL: {url}")
+        if not url:
+            raise ValueError("Пустой URL Google таблицы")
+
+        url = url.strip()
+
+        # Частая ошибка: вставляют "опубликованную" ссылку вида /spreadsheets/d/e/...
+        # Это НЕ spreadsheetId, open_by_key() с ним падает сообщением:
+        # "The string did not match the expected pattern."
+        if re.search(r"/spreadsheets/d/e/", url):
+            raise ValueError(
+                "Похоже, вы указали опубликованную ссылку Google Sheets (/spreadsheets/d/e/...). "
+                "Нужна обычная ссылка на таблицу (редактирование) вида "
+                "https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit"
+            )
+
+        # 1) Нормальный URL таблицы
+        match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
+        if match:
+            return match.group(1)
+
+        # 2) Drive link / open?id=... или любой URL с параметром id=
+        match = re.search(r"(?:\\?|&|^)id=([a-zA-Z0-9-_]+)", url)
+        if match:
+            return match.group(1)
+
+        # 3) Пользователь мог вставить "чистый" spreadsheetId
+        # ID обычно длинный (>= 25) и состоит из [A-Za-z0-9_-]
+        if re.fullmatch(r"[a-zA-Z0-9-_]{25,}", url):
+            return url
+
+        raise ValueError(
+            f"Не удалось извлечь spreadsheetId из строки: {url}. "
+            "Передайте ссылку вида https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit "
+            "или сам <SPREADSHEET_ID>."
+        )
     
     def _get_or_create_tracking_sheet(self, spreadsheet: gspread.Spreadsheet) -> gspread.Worksheet:
         """
