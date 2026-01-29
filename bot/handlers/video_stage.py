@@ -272,12 +272,12 @@ async def cmd_send_video_request(message: Message, state: FSMContext):
             )
             return
         
-        # Получаем пользователей, которые отправили анкету
+        # Получаем пользователей, которые отправили анкету НА ЭТОТ ФАКУЛЬТЕТ
         result = await db.execute(
             select(User.telegram_id, User.first_name, User.surname)
             .join(UserProgress, User.id == UserProgress.user_id)
             .where(
-                User.faculty_id == admin.faculty_id,
+                UserProgress.faculty_id == admin.faculty_id,  # Важно: по faculty_id в UserProgress!
                 UserProgress.stage_type == StageType.QUESTIONNAIRE,
                 UserProgress.status == SubmissionStatus.SUBMITTED
             )
@@ -427,7 +427,7 @@ async def callback_confirm_send(callback: CallbackQuery, state: FSMContext):
             select(User.telegram_id, User.first_name, User.surname)
             .join(UserProgress, User.id == UserProgress.user_id)
             .where(
-                User.faculty_id == faculty_id,
+                UserProgress.faculty_id == faculty_id,  # Важно: по faculty_id в UserProgress!
                 UserProgress.stage_type == StageType.QUESTIONNAIRE,
                 UserProgress.status == SubmissionStatus.SUBMITTED
             )
