@@ -50,6 +50,11 @@ class VideoChatStates(StatesGroup):
     waiting_chat_id = State()
 
 
+class VideoRequestStates(StatesGroup):
+    waiting_message_text = State()
+    confirm_send = State()
+
+
 # === Команда /get_chat_id ===
 
 @video_stage_router.message(Command("get_chat_id"))
@@ -235,7 +240,7 @@ async def callback_cancel_chat(callback: CallbackQuery, state: FSMContext):
 # === Рассылка сообщения с кнопкой "Загрузить видео" ===
 
 @video_stage_router.message(Command("send_video_request"))
-async def cmd_send_video_request(message: Message):
+async def cmd_send_video_request(message: Message, state: FSMContext):
     """Разослать сообщение с кнопкой загрузки видео"""
     admin = await get_head_admin(message.from_user.id)
     
@@ -282,22 +287,157 @@ async def cmd_send_video_request(message: Message):
         if not users:
             await message.answer("❌ Нет пользователей, которые отправили анкету.")
             return
+        
+        faculty_name = faculty.name
+        user_count = len(users)
+    
+    # Сохраняем данные в состояние
+    await state.update_data(
+        faculty_id=admin.faculty_id,
+        faculty_name=faculty_name,
+        user_count=user_count
+    )
+    
+    # Шаблон сообщения по умолчанию
+    default_template = (
+        "🎬 <b>Второй этап отбора</b>\n\n"
+        "Поздравляем! Вы прошли первый этап отбора.\n\n"
+        "Теперь вам нужно загрузить <b>домашнее видео</b>.\n\n"
+        "<b>Требования к видео:</b>\n"
+        "• Длительность: до 1 минуты\n"
+        "• Расскажите о себе и почему хотите в Студсовет\n\n"
+        "<b>Как отправить видео:</b>\n"
+        "1. Нажмите кнопку «📹 Загрузить видео» ниже\n"
+        "2. Отправьте ваше видео в этот чат\n"
+        "3. Видео будет автоматически передано на проверку"
+    )
+    
+    await state.set_state(VideoRequestStates.waiting_message_text)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📝 Использовать шаблон", callback_data="vr:use_template")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="vr:cancel")]
+    ])
+    
+    await message.answer(
+        f"📢 <b>Рассылка уведомления о видео-этапе</b>\n\n"
+        f"Факультет: «{faculty_name}»\n"
+        f"Получателей: <b>{user_count}</b> чел.\n\n"
+        f"Напишите текст сообщения, который получат кандидаты.\n\n"
+        f"<i>💡 Совет: используйте HTML-разметку для форматирования:</i>\n"
+        f"<code>&lt;b&gt;жирный&lt;/b&gt;</code> → <b>жирный</b>\n"
+        f"<code>&lt;i&gt;курсив&lt;/i&gt;</code> → <i>курсив</i>\n\n"
+        f"Или нажмите «📝 Использовать шаблон» для стандартного текста.",
+        reply_markup=keyboard
+    )
+
+
+@video_stage_router.callback_query(F.data == "vr:use_template", VideoRequestStates.waiting_message_text)
+async def callback_use_template(callback: CallbackQuery, state: FSMContext):
+    """Использовать шаблон сообщения"""
+    default_template = (
+        "🎬 <b>Второй этап отбора</b>\n\n"
+        "Поздравляем! Вы прошли первый этап отбора.\n\n"
+        "Теперь вам нужно загрузить <b>домашнее видео</b>.\n\n"
+        "<b>Требования к видео:</b>\n"
+        "• Длительность: до 1 минуты\n"
+        "• Расскажите о себе и почему хотите в Студсовет\n\n"
+        "<b>Как отправить видео:</b>\n"
+        "1. Нажмите кнопку «📹 Загрузить видео» ниже\n"
+        "2. Отправьте ваше видео в этот чат\n"
+        "3. Видео будет автоматически передано на проверку"
+    )
+    
+    await state.update_data(broadcast_text=default_template)
+    await show_preview(callback.message, state)
+    await callback.answer()
+
+
+@video_stage_router.message(VideoRequestStates.waiting_message_text, F.text)
+async def process_custom_message(message: Message, state: FSMContext):
+    """Получен кастомный текст сообщения"""
+    custom_text = message.text.strip()
+    
+    if len(custom_text) < 10:
+        await message.answer("❌ Сообщение слишком короткое. Напишите хотя бы 10 символов.")
+        return
+    
+    if len(custom_text) > 4000:
+        await message.answer("❌ Сообщение слишком длинное (максимум 4000 символов).")
+        return
+    
+    await state.update_data(broadcast_text=custom_text)
+    await show_preview(message, state)
+
+
+async def show_preview(message: Message, state: FSMContext):
+    """Показать превью сообщения"""
+    data = await state.get_data()
+    broadcast_text = data["broadcast_text"]
+    faculty_name = data["faculty_name"]
+    user_count = data["user_count"]
+    
+    await state.set_state(VideoRequestStates.confirm_send)
+    
+    # Кнопка для загрузки видео (как будет у пользователей)
+    preview_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📹 Загрузить видео", callback_data="video:upload")]
+    ])
+    
+    # Показываем превью
+    await message.answer(
+        f"👁 <b>Превью сообщения</b>\n\n"
+        f"Так увидят кандидаты:\n"
+        f"{'─' * 30}"
+    )
+    
+    await message.answer(
+        broadcast_text,
+        reply_markup=preview_keyboard
+    )
+    
+    # Кнопки подтверждения
+    confirm_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Отправить", callback_data="vr:confirm"),
+            InlineKeyboardButton(text="✏️ Изменить", callback_data="vr:edit")
+        ],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="vr:cancel")]
+    ])
+    
+    await message.answer(
+        f"{'─' * 30}\n\n"
+        f"📤 Отправить <b>{user_count}</b> кандидатам факультета «{faculty_name}»?",
+        reply_markup=confirm_keyboard
+    )
+
+
+@video_stage_router.callback_query(F.data == "vr:confirm", VideoRequestStates.confirm_send)
+async def callback_confirm_send(callback: CallbackQuery, state: FSMContext):
+    """Подтвердить отправку"""
+    data = await state.get_data()
+    broadcast_text = data["broadcast_text"]
+    faculty_id = data["faculty_id"]
+    
+    await callback.message.edit_text("⏳ Отправка сообщений...")
+    
+    # Получаем пользователей заново
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(User.telegram_id, User.first_name, User.surname)
+            .join(UserProgress, User.id == UserProgress.user_id)
+            .where(
+                User.faculty_id == faculty_id,
+                UserProgress.stage_type == StageType.QUESTIONNAIRE,
+                UserProgress.status == SubmissionStatus.SUBMITTED
+            )
+        )
+        users = result.fetchall()
     
     # Кнопка для загрузки видео
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📹 Загрузить видео", callback_data="video:upload")]
     ])
-    
-    broadcast_text = (
-        f"🎬 <b>Второй этап отбора</b>\n\n"
-        f"Поздравляем! Вы прошли первый этап отбора.\n\n"
-        f"Теперь вам нужно загрузить <b>домашнее видео</b>.\n\n"
-        f"<b>Как отправить видео:</b>\n"
-        f"1. Нажмите кнопку «📹 Загрузить видео» ниже\n"
-        f"2. Отправьте ваше видео в этот чат (личные сообщения с ботом)\n"
-        f"3. Видео будет автоматически передано на проверку\n\n"
-        f"<i>Все инструкции также доступны в Mini App</i>"
-    )
     
     # Отправляем сообщения
     success = 0
@@ -305,7 +445,7 @@ async def cmd_send_video_request(message: Message):
     
     for user_id, first_name, surname in users:
         try:
-            await message.bot.send_message(
+            await callback.bot.send_message(
                 user_id,
                 broadcast_text,
                 reply_markup=keyboard
@@ -315,11 +455,39 @@ async def cmd_send_video_request(message: Message):
             logger.warning(f"Не удалось отправить сообщение {user_id}: {e}")
             failed += 1
     
-    await message.answer(
+    await state.clear()
+    
+    await callback.message.edit_text(
         f"✅ <b>Рассылка завершена</b>\n\n"
-        f"Доставлено: {success}\n"
-        f"Ошибок: {failed}"
+        f"✉️ Доставлено: <b>{success}</b>\n"
+        f"❌ Ошибок: <b>{failed}</b>"
     )
+
+
+@video_stage_router.callback_query(F.data == "vr:edit", VideoRequestStates.confirm_send)
+async def callback_edit_message(callback: CallbackQuery, state: FSMContext):
+    """Изменить текст сообщения"""
+    await state.set_state(VideoRequestStates.waiting_message_text)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📝 Использовать шаблон", callback_data="vr:use_template")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="vr:cancel")]
+    ])
+    
+    await callback.message.edit_text(
+        "✏️ <b>Редактирование</b>\n\n"
+        "Напишите новый текст сообщения:",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@video_stage_router.callback_query(F.data == "vr:cancel")
+async def callback_cancel_video_request(callback: CallbackQuery, state: FSMContext):
+    """Отменить рассылку"""
+    await state.clear()
+    await callback.message.edit_text("❌ Рассылка отменена")
+    await callback.answer()
 
 
 # === Обработка загрузки видео ===
