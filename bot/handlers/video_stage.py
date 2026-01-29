@@ -570,11 +570,20 @@ async def handle_video_submission(message: Message, bot: Bot):
         
         questionnaire_progress, faculty = row
         
+        # Сохраняем нужные данные ДО выхода из сессии (чтобы избежать MissingGreenlet)
+        faculty_id = faculty.id
+        video_chat_id = faculty.video_chat_id
+        user_id = user.id
+        user_telegram_id = user.telegram_id
+        user_name = f"{user.first_name or ''} {user.surname or ''}".strip()
+        if not user_name:
+            user_name = f"User {user_telegram_id}"
+        
         # Проверяем, не отправлял ли уже видео
         result = await db.execute(
             select(UserProgress).where(
-                UserProgress.user_id == user.id,
-                UserProgress.faculty_id == faculty.id,
+                UserProgress.user_id == user_id,
+                UserProgress.faculty_id == faculty_id,
                 UserProgress.stage_type == StageType.HOME_VIDEO
             )
         )
@@ -589,8 +598,8 @@ async def handle_video_submission(message: Message, bot: Bot):
             progress = existing_progress
         else:
             progress = UserProgress(
-                user_id=user.id,
-                faculty_id=faculty.id,  # Факультет, куда подавали анкету!
+                user_id=user_id,
+                faculty_id=faculty_id,
                 stage_type=StageType.HOME_VIDEO,
                 status=SubmissionStatus.SUBMITTED,
                 submitted_at=datetime.now()
@@ -600,45 +609,44 @@ async def handle_video_submission(message: Message, bot: Bot):
         progress.status = SubmissionStatus.SUBMITTED
         progress.submitted_at = datetime.now()
         await db.commit()
-        
-        # Отправляем видео в групповой чат
-        if faculty.video_chat_id:
-            try:
-                user_name = f"{user.first_name} {user.surname or ''}".strip()
-                submission_time = datetime.now().strftime("%d.%m.%Y %H:%M")
-                
-                caption = (
-                    f"📹 <b>Видео от кандидата</b>\n\n"
-                    f"👤 <b>{user_name}</b>\n"
-                    f"🆔 ID: <code>{user.telegram_id}</code>\n"
-                    f"⏰ Время отправки: {submission_time}"
-                )
-                
-                if message.caption:
-                    caption += f"\n\n💬 <i>Комментарий кандидата:</i>\n{message.caption}"
-                
-                await bot.send_video(
-                    faculty.video_chat_id,
-                    message.video.file_id,
-                    caption=caption,
-                    parse_mode="HTML"
-                )
-                
-                await message.answer(
-                    "✅ <b>Видео успешно отправлено!</b>\n\n"
-                    "Ваше видео получено и отправлено на проверку."
-                )
-            except Exception as e:
-                logger.error(f"Не удалось отправить видео в чат {faculty.video_chat_id}: {e}")
-                await message.answer(
-                    "✅ Видео получено, но произошла ошибка при отправке в группу.\n"
-                    "Обратитесь к администратору."
-                )
-        else:
+    
+    # Отправляем видео в групповой чат (уже вне сессии БД)
+    if video_chat_id:
+        try:
+            submission_time = datetime.now().strftime("%d.%m.%Y %H:%M")
+            
+            caption = (
+                f"📹 <b>Видео от кандидата</b>\n\n"
+                f"👤 <b>{user_name}</b>\n"
+                f"🆔 ID: <code>{user_telegram_id}</code>\n"
+                f"⏰ Время отправки: {submission_time}"
+            )
+            
+            if message.caption:
+                caption += f"\n\n💬 <i>Комментарий кандидата:</i>\n{message.caption}"
+            
+            await bot.send_video(
+                video_chat_id,
+                message.video.file_id,
+                caption=caption,
+                parse_mode="HTML"
+            )
+            
             await message.answer(
-                "✅ Видео получено, но чат для видео не настроен.\n"
+                "✅ <b>Видео успешно отправлено!</b>\n\n"
+                "Ваше видео получено и отправлено на проверку."
+            )
+        except Exception as e:
+            logger.error(f"Не удалось отправить видео в чат {video_chat_id}: {e}")
+            await message.answer(
+                "✅ Видео получено, но произошла ошибка при отправке в группу.\n"
                 "Обратитесь к администратору."
             )
+    else:
+        await message.answer(
+            "✅ Видео получено, но чат для видео не настроен.\n"
+            "Обратитесь к администратору."
+        )
 
 
 # === Управление приёмом видео ===
