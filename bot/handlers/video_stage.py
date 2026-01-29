@@ -505,34 +505,29 @@ async def callback_video_upload(callback: CallbackQuery):
             await callback.answer("Вы не зарегистрированы", show_alert=True)
             return
         
-        # Ищем факультет через UserProgress (куда человек подал анкету)
+        # Ищем факультет, где человек подал анкету И где сейчас этап HOME_VIDEO
         result = await db.execute(
             select(UserProgress, Faculty)
             .join(Faculty, UserProgress.faculty_id == Faculty.id)
             .where(
                 UserProgress.user_id == user.id,
                 UserProgress.stage_type == StageType.QUESTIONNAIRE,
-                UserProgress.status == SubmissionStatus.SUBMITTED
+                UserProgress.status == SubmissionStatus.SUBMITTED,
+                Faculty.current_stage == StageType.HOME_VIDEO,  # Только где этап видео!
+                Faculty.video_submission_open == True  # И приём открыт
             )
         )
         row = result.first()
         
         if not row:
-            await callback.answer("Вы не подавали анкету", show_alert=True)
+            await callback.answer("Нет факультетов с открытым приёмом видео", show_alert=True)
             return
         
         progress, faculty = row
-        
-        if faculty.current_stage != StageType.HOME_VIDEO:
-            await callback.answer("Этап загрузки видео ещё не начался", show_alert=True)
-            return
-        
-        if not faculty.video_submission_open:
-            await callback.answer("Приём видео закрыт", show_alert=True)
-            return
     
     await callback.message.answer(
-        "📹 <b>Отправь видео в этот чат</b>\n\n"
+        f"📹 <b>Отправь видео в этот чат</b>\n\n"
+        f"Факультет: <b>{faculty.name}</b>\n\n"
         "Просто запиши и отправь видео сюда — оно автоматически уйдёт на проверку.\n\n"
         "<i>Максимальный размер: 50 МБ</i>"
     )
@@ -552,31 +547,28 @@ async def handle_video_submission(message: Message, bot: Bot):
             await message.answer("❌ Вы не зарегистрированы.")
             return
         
-        # Ищем факультет через UserProgress (куда человек подал анкету)
+        # Ищем факультет, где человек подал анкету И где сейчас этап HOME_VIDEO
         result = await db.execute(
             select(UserProgress, Faculty)
             .join(Faculty, UserProgress.faculty_id == Faculty.id)
             .where(
                 UserProgress.user_id == user.id,
                 UserProgress.stage_type == StageType.QUESTIONNAIRE,
-                UserProgress.status == SubmissionStatus.SUBMITTED
+                UserProgress.status == SubmissionStatus.SUBMITTED,
+                Faculty.current_stage == StageType.HOME_VIDEO,  # Только где этап видео!
+                Faculty.video_submission_open == True  # И приём открыт
             )
         )
         row = result.first()
         
         if not row:
-            await message.answer("❌ Вы не подавали анкету.")
+            await message.answer(
+                "❌ Нет факультетов с открытым приёмом видео.\n\n"
+                "Возможно, этап ещё не начался или приём уже закрыт."
+            )
             return
         
         questionnaire_progress, faculty = row
-        
-        if faculty.current_stage != StageType.HOME_VIDEO:
-            await message.answer("❌ Этап загрузки видео ещё не начался.")
-            return
-        
-        if not faculty.video_submission_open:
-            await message.answer("❌ Приём видео закрыт администратором.")
-            return
         
         # Проверяем, не отправлял ли уже видео
         result = await db.execute(
