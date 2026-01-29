@@ -505,26 +505,35 @@ async def callback_video_upload(callback: CallbackQuery):
             await callback.answer("Вы не зарегистрированы", show_alert=True)
             return
         
+        # Ищем факультет через UserProgress (куда человек подал анкету)
         result = await db.execute(
-            select(Faculty).where(Faculty.id == user.faculty_id)
+            select(UserProgress, Faculty)
+            .join(Faculty, UserProgress.faculty_id == Faculty.id)
+            .where(
+                UserProgress.user_id == user.id,
+                UserProgress.stage_type == StageType.QUESTIONNAIRE,
+                UserProgress.status == SubmissionStatus.SUBMITTED
+            )
         )
-        faculty = result.scalars().first()
+        row = result.first()
         
-        if not faculty:
-            await callback.answer("Факультет не найден", show_alert=True)
+        if not row:
+            await callback.answer("Вы не подавали анкету", show_alert=True)
             return
         
+        progress, faculty = row
+        
         if faculty.current_stage != StageType.HOME_VIDEO:
-            await callback.answer("Этап загрузки видео не активен", show_alert=True)
+            await callback.answer("Этап загрузки видео ещё не начался", show_alert=True)
             return
         
         if not faculty.video_submission_open:
             await callback.answer("Приём видео закрыт", show_alert=True)
             return
     
-    await callback.message.edit_text(
-        "📹 <b>Загрузка видео</b>\n\n"
-        "Отправьте ваше видео в этот чат.\n\n"
+    await callback.message.answer(
+        "📹 <b>Отправь видео в этот чат</b>\n\n"
+        "Просто запиши и отправь видео сюда — оно автоматически уйдёт на проверку.\n\n"
         "<i>Максимальный размер: 50 МБ</i>"
     )
     await callback.answer()
@@ -543,17 +552,26 @@ async def handle_video_submission(message: Message, bot: Bot):
             await message.answer("❌ Вы не зарегистрированы.")
             return
         
+        # Ищем факультет через UserProgress (куда человек подал анкету)
         result = await db.execute(
-            select(Faculty).where(Faculty.id == user.faculty_id)
+            select(UserProgress, Faculty)
+            .join(Faculty, UserProgress.faculty_id == Faculty.id)
+            .where(
+                UserProgress.user_id == user.id,
+                UserProgress.stage_type == StageType.QUESTIONNAIRE,
+                UserProgress.status == SubmissionStatus.SUBMITTED
+            )
         )
-        faculty = result.scalars().first()
+        row = result.first()
         
-        if not faculty:
-            await message.answer("❌ Факультет не найден.")
+        if not row:
+            await message.answer("❌ Вы не подавали анкету.")
             return
         
+        questionnaire_progress, faculty = row
+        
         if faculty.current_stage != StageType.HOME_VIDEO:
-            await message.answer("❌ Этап загрузки видео не активен.")
+            await message.answer("❌ Этап загрузки видео ещё не начался.")
             return
         
         if not faculty.video_submission_open:
@@ -564,6 +582,7 @@ async def handle_video_submission(message: Message, bot: Bot):
         result = await db.execute(
             select(UserProgress).where(
                 UserProgress.user_id == user.id,
+                UserProgress.faculty_id == faculty.id,
                 UserProgress.stage_type == StageType.HOME_VIDEO
             )
         )
@@ -579,7 +598,7 @@ async def handle_video_submission(message: Message, bot: Bot):
         else:
             progress = UserProgress(
                 user_id=user.id,
-                faculty_id=user.faculty_id,
+                faculty_id=faculty.id,  # Факультет, куда подавали анкету!
                 stage_type=StageType.HOME_VIDEO,
                 status=SubmissionStatus.SUBMITTED,
                 submitted_at=datetime.now()
