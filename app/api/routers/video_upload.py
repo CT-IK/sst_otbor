@@ -89,8 +89,9 @@ async def upload_to_s3(content: bytes, filename: str, content_type: str) -> str:
     )
     
     # Формируем публичный URL
-    # Для reg.ru формат: https://bucket.s3.regru.cloud/filename
-    public_url = f"{settings.s3_endpoint}/{bucket}/{filename}"
+    # Для reg.ru формат: https://s3.regru.cloud/bucket/filename
+    endpoint = settings.s3_endpoint.rstrip('/')
+    public_url = f"{endpoint}/{bucket}/{filename}"
     
     logger.info(f"Файл загружен в S3: {public_url}")
     return public_url
