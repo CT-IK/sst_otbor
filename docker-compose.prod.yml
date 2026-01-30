@@ -52,6 +52,8 @@ services:
     networks:
       - internal
       - infra_net  # Для доступа от nginx
+    volumes:
+      - video_uploads:/app/uploads/videos  # Хранение загруженных видео
     expose:
       - "8000"
     labels:
@@ -112,3 +114,4 @@ services:
 volumes:
   redis_data:
   pgadmin_data:
+  video_uploads:  # Видео от кандидатов

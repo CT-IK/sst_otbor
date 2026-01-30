@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Загрузка видео</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f0f23;
+            --card-bg: #1a1a2e;
+            --text-color: #e4e4e7;
+            --text-muted: #71717a;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --border: #27272a;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            display: inline-block;
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 16px;
+            padding: 8px 20px;
+            border: 2px solid rgba(99, 102, 241, 0.3);
+            border-radius: 8px;
+        }
+        
+        .header h1 {
+            font-size: 1.75rem;
+            margin-bottom: 8px;
+        }
+        
+        .header .subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+        
+        .status-card {
+            text-align: center;
+            padding: 40px 24px;
+        }
+        
+        .status-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .status-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .status-text {
+            color: var(--text-muted);
+        }
+        
+        .faculty-badge {
+            display: inline-block;
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--accent);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-top: 12px;
+        }
+        
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        
+        .upload-zone:hover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.05);
+        }
+        
+        .upload-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .upload-zone.has-file {
+            border-color: var(--success);
+            background: rgba(34, 197, 94, 0.05);
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+        
+        .upload-text {
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        
+        .upload-hint {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        
+        .file-info {
+            display: none;
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+        }
+        
+        .file-info.visible {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .file-info .icon {
+            font-size: 24px;
+        }
+        
+        .file-info .details {
+            flex: 1;
+        }
+        
+        .file-info .name {
+            font-weight: 500;
+            word-break: break-all;
+        }
+        
+        .file-info .size {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        
+        .file-info .remove {
+            background: none;
+            border: none;
+            color: var(--danger);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+        }
+        
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border);
+        }
+        
+        .progress-container {
+            display: none;
+            margin-bottom: 20px;
+        }
+        
+        .progress-container.visible {
+            display: block;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.3s;
+            width: 0%;
+        }
+        
+        .progress-text {
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        
+        .success-card {
+            text-align: center;
+            padding: 40px 24px;
+        }
+        
+        .success-card .icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+        
+        .success-card h2 {
+            color: var(--success);
+            margin-bottom: 12px;
+        }
+        
+        .success-card p {
+            color: var(--text-muted);
+        }
+        
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .error-message.visible {
+            display: block;
+        }
+        
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">ИК ЦТ</div>
+            <h1>📹 Загрузка видео</h1>
+            <p class="subtitle">Второй этап отбора</p>
+        </div>
+        
+        <!-- Loading -->
+        <div id="loading-section" class="card">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Загрузка...</p>
+            </div>
+        </div>
+        
+        <!-- Status: cannot upload -->
+        <div id="status-section" class="card status-card" style="display: none;">
+            <div class="status-icon" id="status-icon">❌</div>
+            <div class="status-title" id="status-title">Загрузка недоступна</div>
+            <div class="status-text" id="status-text">Причина будет здесь</div>
+        </div>
+        
+        <!-- Upload form -->
+        <div id="upload-section" style="display: none;">
+            <div class="card">
+                <div id="faculty-info" style="text-align: center; margin-bottom: 20px;">
+                    <span class="faculty-badge" id="faculty-name-badge"></span>
+                </div>
+                
+                <div class="upload-zone" id="upload-zone">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">Нажмите или перетащите видео</div>
+                    <div class="upload-hint">MP4, MOV, AVI, MKV, WebM • до 500 МБ</div>
+                </div>
+                
+                <input type="file" id="file-input" accept="video/*">
+                
+                <div class="file-info" id="file-info">
+                    <span class="icon">🎬</span>
+                    <div class="details">
+                        <div class="name" id="file-name"></div>
+                        <div class="size" id="file-size"></div>
+                    </div>
+                    <button class="remove" id="remove-file">✕</button>
+                </div>
+                
+                <div class="error-message" id="error-message"></div>
+                
+                <div class="progress-container" id="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-text" id="progress-text">Загрузка: 0%</div>
+                </div>
+                
+                <button class="btn btn-primary" id="upload-btn" disabled>
+                    📤 Отправить видео
+                </button>
+            </div>
+        </div>
+        
+        <!-- Success -->
+        <div id="success-section" class="card success-card" style="display: none;">
+            <div class="icon">✅</div>
+            <h2>Видео отправлено!</h2>
+            <p>Ваше видео успешно загружено и отправлено на проверку.</p>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = window.location.origin + '/api/v1';
+        
+        // Telegram Web App
+        const tg = window.Telegram?.WebApp;
+        let telegramId = null;
+        
+        // Elements
+        const loadingSection = document.getElementById('loading-section');
+        const statusSection = document.getElementById('status-section');
+        const uploadSection = document.getElementById('upload-section');
+        const successSection = document.getElementById('success-section');
+        
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileInfo = document.getElementById('file-info');
+        const fileName = document.getElementById('file-name');
+        const fileSize = document.getElementById('file-size');
+        const removeFile = document.getElementById('remove-file');
+        const uploadBtn = document.getElementById('upload-btn');
+        const errorMessage = document.getElementById('error-message');
+        const progressContainer = document.getElementById('progress-container');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const facultyNameBadge = document.getElementById('faculty-name-badge');
+        
+        let selectedFile = null;
+        
+        // Init
+        async function init() {
+            // Get Telegram ID
+            if (tg && tg.initDataUnsafe?.user?.id) {
+                telegramId = tg.initDataUnsafe.user.id;
+                tg.ready();
+                tg.expand();
+            } else {
+                // Fallback: try to get from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                telegramId = urlParams.get('telegram_id');
+            }
+            
+            if (!telegramId) {
+                showStatus('❌', 'Ошибка авторизации', 'Не удалось получить Telegram ID');
+                return;
+            }
+            
+            // Check status
+            await checkStatus();
+        }
+        
+        async function checkStatus() {
+            try {
+                const response = await fetch(`${API_URL}/video/status?telegram_id=${telegramId}`);
+                const data = await response.json();
+                
+                loadingSection.style.display = 'none';
+                
+                if (data.can_upload) {
+                    uploadSection.style.display = 'block';
+                    facultyNameBadge.textContent = data.faculty_name;
+                } else if (data.already_submitted) {
+                    showStatus('✅', 'Видео уже отправлено', 'Вы уже загрузили видео для этого факультета');
+                } else {
+                    showStatus('❌', 'Загрузка недоступна', data.message);
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+                showStatus('❌', 'Ошибка', 'Не удалось проверить статус');
+            }
+        }
+        
+        function showStatus(icon, title, text) {
+            loadingSection.style.display = 'none';
+            statusSection.style.display = 'block';
+            document.getElementById('status-icon').textContent = icon;
+            document.getElementById('status-title').textContent = title;
+            document.getElementById('status-text').textContent = text;
+        }
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('visible');
+        }
+        
+        function hideError() {
+            errorMessage.classList.remove('visible');
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' Б';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' МБ';
+        }
+        
+        function handleFileSelect(file) {
+            hideError();
+            
+            // Check file type
+            const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
+            const allowedExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(ext)) {
+                showError('Неподдерживаемый формат. Разрешены: MP4, MOV, AVI, MKV, WebM');
+                return;
+            }
+            
+            // Check file size (500 MB)
+            const maxSize = 500 * 1024 * 1024;
+            if (file.size > maxSize) {
+                showError('Файл слишком большой. Максимум: 500 МБ');
+                return;
+            }
+            
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.add('visible');
+            uploadZone.classList.add('has-file');
+            uploadBtn.disabled = false;
+        }
+        
+        function clearFile() {
+            selectedFile = null;
+            fileInput.value = '';
+            fileInfo.classList.remove('visible');
+            uploadZone.classList.remove('has-file');
+            uploadBtn.disabled = true;
+            hideError();
+        }
+        
+        async function uploadVideo() {
+            if (!selectedFile) return;
+            
+            hideError();
+            uploadBtn.disabled = true;
+            progressContainer.classList.add('visible');
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            try {
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        progressFill.style.width = percent + '%';
+                        progressText.textContent = `Загрузка: ${percent}%`;
+                    }
+                });
+                
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 200) {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success) {
+                            uploadSection.style.display = 'none';
+                            successSection.style.display = 'block';
+                            
+                            // Notify Telegram
+                            if (tg) {
+                                tg.showAlert('Видео успешно загружено!');
+                            }
+                        } else {
+                            showError(response.message || 'Ошибка загрузки');
+                            resetUploadUI();
+                        }
+                    } else {
+                        try {
+                            const error = JSON.parse(xhr.responseText);
+                            showError(error.detail || 'Ошибка загрузки');
+                        } catch {
+                            showError('Ошибка загрузки: ' + xhr.status);
+                        }
+                        resetUploadUI();
+                    }
+                });
+                
+                xhr.addEventListener('error', () => {
+                    showError('Ошибка сети. Проверьте подключение.');
+                    resetUploadUI();
+                });
+                
+                xhr.open('POST', `${API_URL}/video/upload?telegram_id=${telegramId}`);
+                xhr.send(formData);
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                showError('Ошибка загрузки: ' + error.message);
+                resetUploadUI();
+            }
+        }
+        
+        function resetUploadUI() {
+            progressContainer.classList.remove('visible');
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Загрузка: 0%';
+            uploadBtn.disabled = false;
+        }
+        
+        // Event listeners
+        uploadZone.addEventListener('click', () => fileInput.click());
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+        
+        removeFile.addEventListener('click', clearFile);
+        uploadBtn.addEventListener('click', uploadVideo);
+        
+        // Start
+        init();
+    </script>
+</body>
+</html>

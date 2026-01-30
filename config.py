@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Telegram
     telegram_bot_token: str = ""
     
+    # Базовый URL для ссылок (без trailing slash)
+    base_url: str = Field(default="https://putevod-ik.ru", alias="BASE_URL")
+    
     # Супер-админы (могут создавать факультеты и назначать админов)
     # Список Telegram ID через запятую: "123456789,987654321"
     super_admin_ids: str = ""

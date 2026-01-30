@@ -7,12 +7,13 @@ from datetime import datetime
 from typing import Optional
 
 from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy import select, func
 
+from config import settings
 from db.session import async_session_maker
 from db.models import Administrator, Faculty, User, UserProgress, StageType, SubmissionStatus
 
@@ -379,9 +380,10 @@ async def show_preview(message: Message, state: FSMContext):
     
     await state.set_state(VideoRequestStates.confirm_send)
     
-    # Кнопка для загрузки видео (как будет у пользователей)
+    # Кнопка для загрузки видео (как будет у пользователей) - ведёт на Mini App
+    video_upload_url = f"{settings.base_url}/video-upload"
     preview_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📹 Загрузить видео", callback_data="video:upload")]
+        [InlineKeyboardButton(text="📹 Загрузить видео", web_app=WebAppInfo(url=video_upload_url))]
     ])
     
     # Показываем превью
@@ -434,9 +436,10 @@ async def callback_confirm_send(callback: CallbackQuery, state: FSMContext):
         )
         users = result.fetchall()
     
-    # Кнопка для загрузки видео
+    # Кнопка для загрузки видео - ведёт на Mini App
+    video_upload_url = f"{settings.base_url}/video-upload"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📹 Загрузить видео", callback_data="video:upload")]
+        [InlineKeyboardButton(text="📹 Загрузить видео", web_app=WebAppInfo(url=video_upload_url))]
     ])
     
     # Отправляем сообщения
@@ -494,42 +497,21 @@ async def callback_cancel_video_request(callback: CallbackQuery, state: FSMConte
 
 @video_stage_router.callback_query(F.data == "video:upload")
 async def callback_video_upload(callback: CallbackQuery):
-    """Пользователь нажал кнопку загрузки видео"""
-    async with async_session_maker() as db:
-        result = await db.execute(
-            select(User).where(User.telegram_id == callback.from_user.id)
-        )
-        user = result.scalars().first()
-        
-        if not user:
-            await callback.answer("Вы не зарегистрированы", show_alert=True)
-            return
-        
-        # Ищем факультет, где человек подал анкету И где сейчас этап HOME_VIDEO
-        result = await db.execute(
-            select(UserProgress, Faculty)
-            .join(Faculty, UserProgress.faculty_id == Faculty.id)
-            .where(
-                UserProgress.user_id == user.id,
-                UserProgress.stage_type == StageType.QUESTIONNAIRE,
-                UserProgress.status == SubmissionStatus.SUBMITTED,
-                Faculty.current_stage == StageType.HOME_VIDEO,  # Только где этап видео!
-                Faculty.video_submission_open == True  # И приём открыт
-            )
-        )
-        row = result.first()
-        
-        if not row:
-            await callback.answer("Нет факультетов с открытым приёмом видео", show_alert=True)
-            return
-        
-        progress, faculty = row
+    """
+    Fallback для старых сообщений с callback кнопками.
+    Теперь загрузка идёт через Mini App.
+    """
+    video_upload_url = f"{settings.base_url}/video-upload"
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📹 Открыть форму загрузки", web_app=WebAppInfo(url=video_upload_url))]
+    ])
     
     await callback.message.answer(
-        f"📹 <b>Отправь видео в этот чат</b>\n\n"
-        f"Факультет: <b>{faculty.name}</b>\n\n"
-        "Просто запиши и отправь видео сюда — оно автоматически уйдёт на проверку.\n\n"
-        "<i>Максимальный размер: 50 МБ</i>"
+        "📹 <b>Загрузка видео</b>\n\n"
+        "Нажмите кнопку ниже, чтобы открыть форму загрузки видео.\n\n"
+        "<i>Теперь можно загружать видео до 500 МБ!</i>",
+        reply_markup=keyboard
     )
     await callback.answer()
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.core.redis import redis_client
-from app.api.routers import questionnaire, admin_stats, interview_slots, interview_days, google_sheets
+from app.api.routers import questionnaire, admin_stats, interview_slots, interview_days, google_sheets, video_upload
 
 
 @asynccontextmanager
@@ -40,6 +40,7 @@ app.include_router(admin_stats.router, prefix="/api/v1")
 app.include_router(interview_slots.router, prefix="/api/v1")
 app.include_router(interview_days.router, prefix="/api/v1")
 app.include_router(google_sheets.router, prefix="/api/v1")
+app.include_router(video_upload.router, prefix="/api/v1")
 
 # Раздаём статику (CSS, JS) - ДО HTML роутов
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
@@ -61,6 +62,24 @@ async def admin_page():
     if admin_file.exists():
         return FileResponse(admin_file)
     return {"message": "Admin page not found"}
+
+
+@app.get("/video-upload")
+async def video_upload_page():
+    """Страница загрузки видео"""
+    video_file = FRONTEND_DIR / "video-upload.html"
+    if video_file.exists():
+        return FileResponse(video_file)
+    return {"message": "Video upload page not found"}
+
+
+@app.get("/video-test")
+async def video_test_page():
+    """Тестовая страница загрузки видео (без авторизации)"""
+    video_file = FRONTEND_DIR / "video-test.html"
+    if video_file.exists():
+        return FileResponse(video_file)
+    return {"message": "Video test page not found"}
 
 
 @app.get("/healthz")
