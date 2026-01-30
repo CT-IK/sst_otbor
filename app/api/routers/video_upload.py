@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from db.session import get_db
 from db.models import (
-    User, Faculty, UserProgress, HomeVideo,
+    User, Faculty, UserProgress, HomeVideo, Questionnaire,
     StageType, SubmissionStatus
 )
 from config import settings
@@ -240,11 +240,36 @@ async def upload_video(
     # Сохраняем данные до работы с файлом
     user_id = user.id
     user_telegram_id = user.telegram_id
-    user_first_name = user.first_name or ""
-    user_surname = user.surname or ""
     faculty_id = faculty.id
     faculty_name = faculty.name
     video_chat_id = faculty.video_chat_id
+    
+    # Получаем ФИО из анкеты
+    questionnaire_result = await db.execute(
+        select(Questionnaire).where(
+            Questionnaire.user_id == user_id,
+            Questionnaire.faculty_id == faculty_id
+        )
+    )
+    questionnaire = questionnaire_result.scalars().first()
+    
+    # Извлекаем ФИО из ответов анкеты
+    user_name = ""
+    if questionnaire and questionnaire.answers:
+        answers = questionnaire.answers
+        first_name = answers.get('first_name', '') or answers.get('name', '') or answers.get('имя', '')
+        surname = answers.get('surname', '') or answers.get('last_name', '') or answers.get('фамилия', '')
+        middle_name = answers.get('middle_name', '') or answers.get('patronymic', '') or answers.get('отчество', '')
+        
+        # Собираем полное имя
+        name_parts = [surname, first_name, middle_name]
+        user_name = ' '.join(filter(None, name_parts)).strip()
+    
+    # Fallback на данные из User
+    if not user_name:
+        user_name = f"{user.first_name or ''} {user.surname or ''}".strip()
+    if not user_name:
+        user_name = f"User {user_telegram_id}"
     
     # Проверяем, не отправлял ли уже видео
     result = await db.execute(
@@ -333,7 +358,7 @@ async def upload_video(
     if video_chat_id:
         await send_telegram_notification(
             chat_id=video_chat_id,
-            user_name=f"{user_first_name} {user_surname}".strip() or f"User {user_telegram_id}",
+            user_name=user_name,
             user_telegram_id=user_telegram_id,
             faculty_name=faculty_name,
             video_url=video_url,
