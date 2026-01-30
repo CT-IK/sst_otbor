@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     # Базовый URL для ссылок (без trailing slash)
     base_url: str = Field(default="https://putevod-ik.ru", alias="BASE_URL")
     
+    # S3 Storage (reg.ru Object Storage)
+    s3_endpoint: str = Field(default="https://s3.regru.cloud", alias="S3_ENDPOINT")
+    s3_access_key: str = Field(default="", alias="S3_ACCESS_KEY")
+    s3_secret_key: str = Field(default="", alias="S3_SECRET_KEY")
+    s3_bucket: str = Field(default="sst-videos", alias="S3_BUCKET")
+    s3_region: str = Field(default="ru-1", alias="S3_REGION")
+    
     # Супер-админы (могут создавать факультеты и назначать админов)
     # Список Telegram ID через запятую: "123456789,987654321"
     super_admin_ids: str = ""

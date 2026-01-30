@@ -6,15 +6,15 @@
     <title>Тест загрузки видео — ИК ЦТ</title>
     <style>
         :root {
-            --bg-color: #0f0f23;
-            --card-bg: #1a1a2e;
+            --bg-color: #0a0a1a;
+            --card-bg: #12122a;
             --text-color: #e4e4e7;
             --text-muted: #71717a;
             --accent: #6366f1;
             --accent-hover: #818cf8;
             --success: #22c55e;
             --danger: #ef4444;
-            --border: #27272a;
+            --border: #1e1e3f;
         }
         
         * {
@@ -44,22 +44,50 @@
         
         .logo {
             display: inline-block;
-            font-size: 2rem;
-            font-weight: 800;
-            letter-spacing: 3px;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899, #6366f1);
+            background-size: 300% 300%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 16px;
-            padding: 12px 24px;
-            border: 2px solid rgba(99, 102, 241, 0.3);
+            margin-bottom: 8px;
+            padding: 12px 28px;
+            border: 2px solid rgba(99, 102, 241, 0.4);
             border-radius: 12px;
+            animation: shimmer 3s ease-in-out infinite, glow 2s ease-in-out infinite alternate;
+            text-shadow: 0 0 30px rgba(99, 102, 241, 0.5);
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        @keyframes glow {
+            0% { 
+                border-color: rgba(99, 102, 241, 0.3);
+                box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+            }
+            100% { 
+                border-color: rgba(139, 92, 246, 0.6);
+                box-shadow: 0 0 40px rgba(139, 92, 246, 0.4);
+            }
+        }
+        
+        .logo-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-top: 8px;
         }
         
         .header h1 {
             font-size: 1.5rem;
-            margin-bottom: 8px;
+            margin: 20px 0 8px;
         }
         
         .header .subtitle {
@@ -68,18 +96,19 @@
         
         .test-badge {
             display: inline-block;
-            background: rgba(239, 68, 68, 0.2);
+            background: rgba(239, 68, 68, 0.15);
             color: var(--danger);
             padding: 4px 12px;
             border-radius: 20px;
             font-size: 0.8rem;
-            margin-top: 8px;
+            margin-top: 12px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
         
         .card {
             background: var(--card-bg);
             border-radius: 16px;
-            padding: 24px;
+            padding: 28px;
             border: 1px solid var(--border);
             margin-bottom: 20px;
         }
@@ -110,8 +139,9 @@
         }
         
         .upload-icon {
-            font-size: 64px;
+            font-size: 48px;
             margin-bottom: 16px;
+            filter: grayscale(1);
         }
         
         .upload-text {
@@ -138,7 +168,8 @@
         }
         
         .file-info .icon {
-            font-size: 32px;
+            font-size: 28px;
+            filter: grayscale(1);
         }
         
         .file-info .details {
@@ -175,12 +206,13 @@
         }
         
         .btn-primary {
-            background: var(--accent);
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
             color: white;
         }
         
         .btn-primary:hover:not(:disabled) {
-            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
         }
         
         .btn-primary:disabled {
@@ -188,6 +220,7 @@
             cursor: not-allowed;
         }
         
+        /* Прогресс загрузки */
         .progress-container {
             display: none;
             margin-bottom: 20px;
@@ -198,24 +231,77 @@
         }
         
         .progress-bar {
-            height: 10px;
+            height: 12px;
             background: var(--border);
-            border-radius: 5px;
+            border-radius: 6px;
             overflow: hidden;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
+            position: relative;
         }
         
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, var(--accent), #8b5cf6);
-            border-radius: 5px;
+            background: linear-gradient(90deg, var(--accent), #8b5cf6, #ec4899);
+            background-size: 200% 100%;
+            border-radius: 6px;
             transition: width 0.3s;
             width: 0%;
+            animation: progressShimmer 1.5s linear infinite;
         }
         
-        .progress-text {
-            text-align: center;
+        @keyframes progressShimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .progress-percent {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .progress-size {
             color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        /* Бегущая строка */
+        .marquee-container {
+            overflow: hidden;
+            margin-top: 16px;
+            padding: 12px 0;
+            background: rgba(99, 102, 241, 0.05);
+            border-radius: 8px;
+        }
+        
+        .marquee {
+            display: flex;
+            white-space: nowrap;
+            animation: marquee 15s linear infinite;
+        }
+        
+        .marquee span {
+            display: inline-block;
+            padding: 0 40px;
+            color: var(--accent);
+            font-weight: 500;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+        }
+        
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
         }
         
         .result {
@@ -273,38 +359,52 @@
     <div class="container">
         <div class="header">
             <div class="logo">ИК ЦТ</div>
-            <h1>🧪 Тестовая загрузка видео</h1>
+            <div class="logo-subtitle">Информационный Комитет Цифровые Технологии</div>
+            <h1>Тестовая загрузка видео</h1>
             <p class="subtitle">Проверка работы без привязки к БД</p>
-            <span class="test-badge">⚠️ ТЕСТОВЫЙ РЕЖИМ</span>
+            <span class="test-badge">ТЕСТОВЫЙ РЕЖИМ</span>
         </div>
         
         <div class="card">
             <div class="upload-zone" id="upload-zone">
-                <div class="upload-icon">📁</div>
+                <div class="upload-icon">▶</div>
                 <div class="upload-text">Нажмите или перетащите видео</div>
-                <div class="upload-hint">MP4, MOV, AVI, MKV, WebM • до 500 МБ</div>
+                <div class="upload-hint">MP4, MOV, AVI, MKV, WebM — до 500 МБ</div>
             </div>
             
             <input type="file" id="file-input" accept="video/*">
             
             <div class="file-info" id="file-info">
-                <span class="icon">🎬</span>
+                <span class="icon">◉</span>
                 <div class="details">
                     <div class="name" id="file-name"></div>
                     <div class="size" id="file-size"></div>
                 </div>
-                <button class="remove" id="remove-file">✕</button>
+                <button class="remove" id="remove-file">×</button>
             </div>
             
             <div class="progress-container" id="progress-container">
+                <div class="progress-info">
+                    <span class="progress-percent" id="progress-percent">0%</span>
+                    <span class="progress-size" id="progress-size">0 / 0 МБ</span>
+                </div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progress-fill"></div>
                 </div>
-                <div class="progress-text" id="progress-text">Загрузка: 0%</div>
+                <div class="marquee-container">
+                    <div class="marquee">
+                        <span>Информационный Комитет Цифровые Технологии</span>
+                        <span>Загрузка видео...</span>
+                        <span>ИК ЦТ</span>
+                        <span>Информационный Комитет Цифровые Технологии</span>
+                        <span>Загрузка видео...</span>
+                        <span>ИК ЦТ</span>
+                    </div>
+                </div>
             </div>
             
             <button class="btn btn-primary" id="upload-btn" disabled>
-                🚀 Загрузить тестовое видео
+                Загрузить видео
             </button>
             
             <div class="result" id="result">
@@ -327,7 +427,8 @@
         const uploadBtn = document.getElementById('upload-btn');
         const progressContainer = document.getElementById('progress-container');
         const progressFill = document.getElementById('progress-fill');
-        const progressText = document.getElementById('progress-text');
+        const progressPercent = document.getElementById('progress-percent');
+        const progressSize = document.getElementById('progress-size');
         const result = document.getElementById('result');
         const resultTitle = document.getElementById('result-title');
         const resultMessage = document.getElementById('result-message');
@@ -377,7 +478,7 @@
         function showResult(success, title, message, info = '') {
             result.classList.remove('success', 'error');
             result.classList.add('visible', success ? 'success' : 'error');
-            resultTitle.textContent = (success ? '✅ ' : '❌ ') + title;
+            resultTitle.textContent = title;
             resultMessage.innerHTML = message;
             resultInfo.innerHTML = info;
         }
@@ -389,6 +490,9 @@
             progressContainer.classList.add('visible');
             result.classList.remove('visible');
             
+            const totalSize = selectedFile.size;
+            const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(1);
+            
             const formData = new FormData();
             formData.append('file', selectedFile);
             
@@ -397,8 +501,11 @@
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) {
                     const percent = Math.round((e.loaded / e.total) * 100);
+                    const loadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+                    
                     progressFill.style.width = percent + '%';
-                    progressText.textContent = `Загрузка: ${percent}%`;
+                    progressPercent.textContent = percent + '%';
+                    progressSize.textContent = `${loadedMB} / ${totalSizeMB} МБ`;
                 }
             });
             
@@ -410,10 +517,10 @@
                     const fullUrl = window.location.origin + response.url;
                     showResult(
                         true,
-                        'Видео загружено!',
+                        'Видео загружено',
                         `Размер: <strong>${response.size_mb} МБ</strong>`,
-                        `📁 Файл: <code>${response.filename}</code><br>
-                         🔗 Ссылка: <a href="${fullUrl}" target="_blank">${fullUrl}</a>`
+                        `Файл: <code>${response.filename}</code><br>
+                         Ссылка: <a href="${fullUrl}" target="_blank">${fullUrl}</a>`
                     );
                     clearFile();
                 } else {
