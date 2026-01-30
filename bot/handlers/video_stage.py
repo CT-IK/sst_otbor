@@ -52,6 +52,7 @@ class VideoChatStates(StatesGroup):
 
 
 class VideoRequestStates(StatesGroup):
+    waiting_pdf = State()  # Ожидание PDF файла
     waiting_message_text = State()
     confirm_send = State()
 
@@ -296,39 +297,66 @@ async def cmd_send_video_request(message: Message, state: FSMContext):
     await state.update_data(
         faculty_id=admin.faculty_id,
         faculty_name=faculty_name,
-        user_count=user_count
+        user_count=user_count,
+        pdf_file_id=None  # Изначально без PDF
     )
     
-    # Шаблон сообщения по умолчанию
-    default_template = (
-        "🎬 <b>Второй этап отбора</b>\n\n"
-        "Поздравляем! Вы прошли первый этап отбора.\n\n"
-        "Теперь вам нужно загрузить <b>домашнее видео</b>.\n\n"
-        "<b>Требования к видео:</b>\n"
-        "• Длительность: до 1 минуты\n"
-        "• Расскажите о себе и почему хотите в Студсовет\n\n"
-        "<b>Как отправить видео:</b>\n"
-        "1. Нажмите кнопку «📹 Загрузить видео» ниже\n"
-        "2. Отправьте ваше видео в этот чат\n"
-        "3. Видео будет автоматически передано на проверку"
-    )
-    
-    await state.set_state(VideoRequestStates.waiting_message_text)
+    await state.set_state(VideoRequestStates.waiting_pdf)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📝 Использовать шаблон", callback_data="vr:use_template")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="vr:cancel")]
+        [InlineKeyboardButton(text="Пропустить (без PDF)", callback_data="vr:skip_pdf")],
+        [InlineKeyboardButton(text="Отмена", callback_data="vr:cancel")]
     ])
     
     await message.answer(
-        f"📢 <b>Рассылка уведомления о видео-этапе</b>\n\n"
+        f"<b>Рассылка уведомления о видео-этапе</b>\n\n"
         f"Факультет: «{faculty_name}»\n"
         f"Получателей: <b>{user_count}</b> чел.\n\n"
-        f"Напишите текст сообщения, который получат кандидаты.\n\n"
-        f"<i>💡 Совет: используйте HTML-разметку для форматирования:</i>\n"
-        f"<code>&lt;b&gt;жирный&lt;/b&gt;</code> → <b>жирный</b>\n"
-        f"<code>&lt;i&gt;курсив&lt;/i&gt;</code> → <i>курсив</i>\n\n"
-        f"Или нажмите «📝 Использовать шаблон» для стандартного текста.",
+        f"<b>Шаг 1 из 2:</b> Отправьте PDF-файл с заданием (если есть).\n\n"
+        f"Или нажмите «Пропустить» если PDF не нужен.",
+        reply_markup=keyboard
+    )
+
+
+@video_stage_router.message(VideoRequestStates.waiting_pdf, F.document)
+async def process_pdf_upload(message: Message, state: FSMContext):
+    """Получен PDF файл"""
+    document = message.document
+    
+    # Проверяем, что это PDF
+    if document.mime_type != "application/pdf":
+        await message.answer("Пожалуйста, отправьте файл в формате PDF.")
+        return
+    
+    # Сохраняем file_id
+    await state.update_data(pdf_file_id=document.file_id)
+    
+    await message.answer(f"PDF-файл «{document.file_name}» получен.")
+    await ask_for_message_text(message, state)
+
+
+@video_stage_router.callback_query(F.data == "vr:skip_pdf", VideoRequestStates.waiting_pdf)
+async def callback_skip_pdf(callback: CallbackQuery, state: FSMContext):
+    """Пропустить PDF"""
+    await callback.message.edit_text("PDF пропущен.")
+    await ask_for_message_text(callback.message, state)
+    await callback.answer()
+
+
+async def ask_for_message_text(message: Message, state: FSMContext):
+    """Запросить текст сообщения"""
+    await state.set_state(VideoRequestStates.waiting_message_text)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Использовать шаблон", callback_data="vr:use_template")],
+        [InlineKeyboardButton(text="Отмена", callback_data="vr:cancel")]
+    ])
+    
+    await message.answer(
+        f"<b>Шаг 2 из 2:</b> Напишите текст сообщения с инструкцией.\n\n"
+        f"Или нажмите «Использовать шаблон» для стандартного текста.\n\n"
+        f"<i>Подсказка: используйте HTML-разметку:</i>\n"
+        f"<code>&lt;b&gt;жирный&lt;/b&gt;</code> — <b>жирный</b>",
         reply_markup=keyboard
     )
 
@@ -337,16 +365,18 @@ async def cmd_send_video_request(message: Message, state: FSMContext):
 async def callback_use_template(callback: CallbackQuery, state: FSMContext):
     """Использовать шаблон сообщения"""
     default_template = (
-        "🎬 <b>Второй этап отбора</b>\n\n"
+        "<b>Второй этап отбора — Видеовизитка</b>\n\n"
         "Поздравляем! Вы прошли первый этап отбора.\n\n"
-        "Теперь вам нужно загрузить <b>домашнее видео</b>.\n\n"
-        "<b>Требования к видео:</b>\n"
-        "• Длительность: до 1 минуты\n"
-        "• Расскажите о себе и почему хотите в Студсовет\n\n"
-        "<b>Как отправить видео:</b>\n"
-        "1. Нажмите кнопку «📹 Загрузить видео» ниже\n"
-        "2. Отправьте ваше видео в этот чат\n"
-        "3. Видео будет автоматически передано на проверку"
+        "Теперь вам нужно загрузить домашнее видео.\n\n"
+        "<b>Как загрузить видео:</b>\n"
+        "1. Нажмите кнопку «Загрузить видео» ниже\n"
+        "2. Откроется форма загрузки\n"
+        "3. Выберите видео с телефона или перетащите файл\n"
+        "4. Дождитесь завершения загрузки\n\n"
+        "<b>Требования:</b>\n"
+        "— Формат: MP4, MOV, AVI, MKV, WebM\n"
+        "— Размер: до 500 МБ\n\n"
+        "После загрузки видео автоматически отправится на проверку."
     )
     
     await state.update_data(broadcast_text=default_template)
@@ -377,18 +407,20 @@ async def show_preview(message: Message, state: FSMContext):
     broadcast_text = data["broadcast_text"]
     faculty_name = data["faculty_name"]
     user_count = data["user_count"]
+    pdf_file_id = data.get("pdf_file_id")
     
     await state.set_state(VideoRequestStates.confirm_send)
     
     # Кнопка для загрузки видео (как будет у пользователей) - ведёт на Mini App
     video_upload_url = f"{settings.base_url}/video-upload"
     preview_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📹 Загрузить видео", web_app=WebAppInfo(url=video_upload_url))]
+        [InlineKeyboardButton(text="Загрузить видео", web_app=WebAppInfo(url=video_upload_url))]
     ])
     
     # Показываем превью
+    pdf_info = "\n+ PDF-файл (будет отправлен первым)" if pdf_file_id else ""
     await message.answer(
-        f"👁 <b>Превью сообщения</b>\n\n"
+        f"<b>Превью сообщения</b>{pdf_info}\n\n"
         f"Так увидят кандидаты:\n"
         f"{'─' * 30}"
     )
@@ -420,8 +452,9 @@ async def callback_confirm_send(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     broadcast_text = data["broadcast_text"]
     faculty_id = data["faculty_id"]
+    pdf_file_id = data.get("pdf_file_id")  # Может быть None
     
-    await callback.message.edit_text("⏳ Отправка сообщений...")
+    await callback.message.edit_text("Отправка сообщений...")
     
     # Получаем пользователей заново
     async with async_session_maker() as db:
@@ -429,7 +462,7 @@ async def callback_confirm_send(callback: CallbackQuery, state: FSMContext):
             select(User.telegram_id, User.first_name, User.surname)
             .join(UserProgress, User.id == UserProgress.user_id)
             .where(
-                UserProgress.faculty_id == faculty_id,  # Важно: по faculty_id в UserProgress!
+                UserProgress.faculty_id == faculty_id,
                 UserProgress.stage_type == StageType.QUESTIONNAIRE,
                 UserProgress.status == SubmissionStatus.SUBMITTED
             )
@@ -439,7 +472,7 @@ async def callback_confirm_send(callback: CallbackQuery, state: FSMContext):
     # Кнопка для загрузки видео - ведёт на Mini App
     video_upload_url = f"{settings.base_url}/video-upload"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📹 Загрузить видео", web_app=WebAppInfo(url=video_upload_url))]
+        [InlineKeyboardButton(text="Загрузить видео", web_app=WebAppInfo(url=video_upload_url))]
     ])
     
     # Отправляем сообщения
@@ -448,6 +481,14 @@ async def callback_confirm_send(callback: CallbackQuery, state: FSMContext):
     
     for user_id, first_name, surname in users:
         try:
+            # 1. Сначала отправляем PDF (если есть)
+            if pdf_file_id:
+                await callback.bot.send_document(
+                    user_id,
+                    pdf_file_id
+                )
+            
+            # 2. Потом сообщение с кнопкой
             await callback.bot.send_message(
                 user_id,
                 broadcast_text,
@@ -460,10 +501,11 @@ async def callback_confirm_send(callback: CallbackQuery, state: FSMContext):
     
     await state.clear()
     
+    pdf_info = " (с PDF)" if pdf_file_id else ""
     await callback.message.edit_text(
-        f"✅ <b>Рассылка завершена</b>\n\n"
-        f"✉️ Доставлено: <b>{success}</b>\n"
-        f"❌ Ошибок: <b>{failed}</b>"
+        f"<b>Рассылка завершена{pdf_info}</b>\n\n"
+        f"Доставлено: <b>{success}</b>\n"
+        f"Ошибок: <b>{failed}</b>"
     )
 
 

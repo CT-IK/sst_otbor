@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Загрузка видео</title>
+    <title>Загрузка видео — ИК ЦТ</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --bg-color: #0f0f23;
-            --card-bg: #1a1a2e;
+            --bg-color: #0a0a1a;
+            --card-bg: #12122a;
             --text-color: #e4e4e7;
             --text-muted: #71717a;
             --accent: #6366f1;
@@ -16,7 +16,7 @@
             --success: #22c55e;
             --warning: #f59e0b;
             --danger: #ef4444;
-            --border: #27272a;
+            --border: #1e1e3f;
         }
         
         * {
@@ -41,32 +41,59 @@
         
         .header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }
         
         .logo {
             display: inline-block;
-            font-size: 1.5rem;
-            font-weight: 800;
-            letter-spacing: 2px;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899, #6366f1);
+            background-size: 300% 300%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 16px;
-            padding: 8px 20px;
-            border: 2px solid rgba(99, 102, 241, 0.3);
-            border-radius: 8px;
+            margin-bottom: 8px;
+            padding: 10px 24px;
+            border: 2px solid rgba(99, 102, 241, 0.4);
+            border-radius: 12px;
+            animation: shimmer 3s ease-in-out infinite, glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        @keyframes glow {
+            0% { 
+                border-color: rgba(99, 102, 241, 0.3);
+                box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+            }
+            100% { 
+                border-color: rgba(139, 92, 246, 0.6);
+                box-shadow: 0 0 40px rgba(139, 92, 246, 0.4);
+            }
+        }
+        
+        .logo-subtitle {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-top: 8px;
         }
         
         .header h1 {
-            font-size: 1.75rem;
-            margin-bottom: 8px;
+            font-size: 1.5rem;
+            margin: 16px 0 8px;
         }
         
         .header .subtitle {
             color: var(--text-muted);
-            font-size: 0.95rem;
+            font-size: 0.9rem;
         }
         
         .card {
@@ -83,8 +110,9 @@
         }
         
         .status-icon {
-            font-size: 48px;
+            font-size: 40px;
             margin-bottom: 16px;
+            filter: grayscale(0.3);
         }
         
         .status-title {
@@ -133,8 +161,9 @@
         }
         
         .upload-icon {
-            font-size: 48px;
+            font-size: 40px;
             margin-bottom: 12px;
+            filter: grayscale(1);
         }
         
         .upload-text {
@@ -163,6 +192,7 @@
         
         .file-info .icon {
             font-size: 24px;
+            filter: grayscale(1);
         }
         
         .file-info .details {
@@ -202,12 +232,13 @@
         }
         
         .btn-primary {
-            background: var(--accent);
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
             color: white;
         }
         
         .btn-primary:hover:not(:disabled) {
-            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
         }
         
         .btn-primary:disabled {
@@ -215,12 +246,7 @@
             cursor: not-allowed;
         }
         
-        .btn-secondary {
-            background: var(--card-bg);
-            color: var(--text-color);
-            border: 1px solid var(--border);
-        }
-        
+        /* Прогресс загрузки */
         .progress-container {
             display: none;
             margin-bottom: 20px;
@@ -230,26 +256,76 @@
             display: block;
         }
         
-        .progress-bar {
-            height: 8px;
-            background: var(--border);
-            border-radius: 4px;
-            overflow: hidden;
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 8px;
+        }
+        
+        .progress-percent {
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .progress-size {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        
+        .progress-bar {
+            height: 10px;
+            background: var(--border);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 12px;
         }
         
         .progress-fill {
             height: 100%;
-            background: var(--accent);
-            border-radius: 4px;
+            background: linear-gradient(90deg, var(--accent), #8b5cf6, #ec4899);
+            background-size: 200% 100%;
+            border-radius: 5px;
             transition: width 0.3s;
             width: 0%;
+            animation: progressShimmer 1.5s linear infinite;
         }
         
-        .progress-text {
-            text-align: center;
-            font-size: 0.9rem;
-            color: var(--text-muted);
+        @keyframes progressShimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        /* Бегущая строка */
+        .marquee-container {
+            overflow: hidden;
+            padding: 10px 0;
+            background: rgba(99, 102, 241, 0.05);
+            border-radius: 8px;
+        }
+        
+        .marquee {
+            display: flex;
+            white-space: nowrap;
+            animation: marquee 15s linear infinite;
+        }
+        
+        .marquee span {
+            display: inline-block;
+            padding: 0 30px;
+            color: var(--accent);
+            font-weight: 500;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+        }
+        
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
         }
         
         .success-card {
@@ -258,8 +334,9 @@
         }
         
         .success-card .icon {
-            font-size: 64px;
+            font-size: 56px;
             margin-bottom: 16px;
+            filter: grayscale(0.2);
         }
         
         .success-card h2 {
@@ -316,7 +393,8 @@
     <div class="container">
         <div class="header">
             <div class="logo">ИК ЦТ</div>
-            <h1>📹 Загрузка видео</h1>
+            <div class="logo-subtitle">Информационный Комитет Цифровые Технологии</div>
+            <h1>Загрузка видео</h1>
             <p class="subtitle">Второй этап отбора</p>
         </div>
         
@@ -330,7 +408,7 @@
         
         <!-- Status: cannot upload -->
         <div id="status-section" class="card status-card" style="display: none;">
-            <div class="status-icon" id="status-icon">❌</div>
+            <div class="status-icon" id="status-icon">×</div>
             <div class="status-title" id="status-title">Загрузка недоступна</div>
             <div class="status-text" id="status-text">Причина будет здесь</div>
         </div>
@@ -343,42 +421,55 @@
                 </div>
                 
                 <div class="upload-zone" id="upload-zone">
-                    <div class="upload-icon">📁</div>
+                    <div class="upload-icon">▶</div>
                     <div class="upload-text">Нажмите или перетащите видео</div>
-                    <div class="upload-hint">MP4, MOV, AVI, MKV, WebM • до 500 МБ</div>
+                    <div class="upload-hint">MP4, MOV, AVI, MKV, WebM — до 500 МБ</div>
                 </div>
                 
                 <input type="file" id="file-input" accept="video/*">
                 
                 <div class="file-info" id="file-info">
-                    <span class="icon">🎬</span>
+                    <span class="icon">◉</span>
                     <div class="details">
                         <div class="name" id="file-name"></div>
                         <div class="size" id="file-size"></div>
                     </div>
-                    <button class="remove" id="remove-file">✕</button>
+                    <button class="remove" id="remove-file">×</button>
                 </div>
                 
                 <div class="error-message" id="error-message"></div>
                 
                 <div class="progress-container" id="progress-container">
+                    <div class="progress-info">
+                        <span class="progress-percent" id="progress-percent">0%</span>
+                        <span class="progress-size" id="progress-size">0 / 0 МБ</span>
+                    </div>
                     <div class="progress-bar">
                         <div class="progress-fill" id="progress-fill"></div>
                     </div>
-                    <div class="progress-text" id="progress-text">Загрузка: 0%</div>
+                    <div class="marquee-container">
+                        <div class="marquee">
+                            <span>Информационный Комитет Цифровые Технологии</span>
+                            <span>Загрузка видео...</span>
+                            <span>ИК ЦТ</span>
+                            <span>Информационный Комитет Цифровые Технологии</span>
+                            <span>Загрузка видео...</span>
+                            <span>ИК ЦТ</span>
+                        </div>
+                    </div>
                 </div>
                 
                 <button class="btn btn-primary" id="upload-btn" disabled>
-                    📤 Отправить видео
+                    Отправить видео
                 </button>
             </div>
         </div>
         
         <!-- Success -->
         <div id="success-section" class="card success-card" style="display: none;">
-            <div class="icon">✅</div>
-            <h2>Видео отправлено!</h2>
-            <p>Ваше видео успешно загружено и отправлено на проверку.</p>
+            <div class="icon">✓</div>
+            <h2>Видео отправлено</h2>
+            <p>Ваше видео успешно загружено и отправлено на проверку. Ожидайте результатов.</p>
         </div>
     </div>
     
@@ -405,7 +496,8 @@
         const errorMessage = document.getElementById('error-message');
         const progressContainer = document.getElementById('progress-container');
         const progressFill = document.getElementById('progress-fill');
-        const progressText = document.getElementById('progress-text');
+        const progressPercent = document.getElementById('progress-percent');
+        const progressSize = document.getElementById('progress-size');
         const facultyNameBadge = document.getElementById('faculty-name-badge');
         
         let selectedFile = null;
@@ -424,7 +516,7 @@
             }
             
             if (!telegramId) {
-                showStatus('❌', 'Ошибка авторизации', 'Не удалось получить Telegram ID');
+                showStatus('×', 'Ошибка авторизации', 'Не удалось получить Telegram ID');
                 return;
             }
             
@@ -443,13 +535,13 @@
                     uploadSection.style.display = 'block';
                     facultyNameBadge.textContent = data.faculty_name;
                 } else if (data.already_submitted) {
-                    showStatus('✅', 'Видео уже отправлено', 'Вы уже загрузили видео для этого факультета');
+                    showStatus('✓', 'Видео уже отправлено', 'Вы уже загрузили видео для этого факультета');
                 } else {
-                    showStatus('❌', 'Загрузка недоступна', data.message);
+                    showStatus('×', 'Загрузка недоступна', data.message);
                 }
             } catch (error) {
                 console.error('Error checking status:', error);
-                showStatus('❌', 'Ошибка', 'Не удалось проверить статус');
+                showStatus('×', 'Ошибка', 'Не удалось проверить статус');
             }
         }
         
@@ -520,6 +612,9 @@
             uploadBtn.disabled = true;
             progressContainer.classList.add('visible');
             
+            const totalSize = selectedFile.size;
+            const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(1);
+            
             const formData = new FormData();
             formData.append('file', selectedFile);
             
@@ -529,8 +624,11 @@
                 xhr.upload.addEventListener('progress', (e) => {
                     if (e.lengthComputable) {
                         const percent = Math.round((e.loaded / e.total) * 100);
+                        const loadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+                        
                         progressFill.style.width = percent + '%';
-                        progressText.textContent = `Загрузка: ${percent}%`;
+                        progressPercent.textContent = percent + '%';
+                        progressSize.textContent = `${loadedMB} / ${totalSizeMB} МБ`;
                     }
                 });
                 
@@ -578,7 +676,8 @@
         function resetUploadUI() {
             progressContainer.classList.remove('visible');
             progressFill.style.width = '0%';
-            progressText.textContent = 'Загрузка: 0%';
+            progressPercent.textContent = '0%';
+            progressSize.textContent = '0 / 0 МБ';
             uploadBtn.disabled = false;
         }
         
