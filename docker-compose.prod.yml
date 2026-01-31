@@ -87,6 +87,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    volumes:
+      - survey_data:/app/data  # Данные опросов (surveys.json)
     networks:
       - internal
       - infra_net  # Для доступа к pgbouncer
@@ -115,3 +117,4 @@ volumes:
   redis_data:
   pgadmin_data:
   video_uploads:  # Видео от кандидатов
+  survey_data:    # Данные опросов
