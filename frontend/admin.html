@@ -61,6 +61,34 @@
         .header-actions {
             display: flex;
             gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .nav-link {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            text-decoration: none;
+            color: var(--text-muted);
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        
+        .nav-link:hover {
+            color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .nav-link.active {
+            color: var(--accent);
+            background: rgba(99, 102, 241, 0.15);
         }
         
         .btn {
@@ -357,6 +385,12 @@
 </head>
 <body>
     <div class="container">
+        <!-- Navigation -->
+        <div class="nav-links" id="nav-links" style="display: none;">
+            <a href="/admin" class="nav-link active" id="nav-admin">📊 Ответы на анкеты</a>
+            <a href="/interviewers" class="nav-link" id="nav-interviewers">👥 Проводящие собесы</a>
+        </div>
+        
         <!-- Auth Form (показывается если нет доступа) -->
         <div id="auth-section" class="auth-form" style="display: none;">
             <h2>🔐 Вход для админа</h2>
@@ -534,10 +568,17 @@
         function showMain() {
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('main-section').style.display = 'block';
+            document.getElementById('nav-links').style.display = 'flex';
             
             // Update export link
             document.getElementById('export-csv-btn').href = 
                 `${API_URL}/admin/export/${facultyId}?telegram_id=${telegramId}`;
+            
+            // Update interviewers link
+            const interviewersLink = document.getElementById('nav-interviewers');
+            if (interviewersLink) {
+                interviewersLink.href = `/interviewers?faculty_id=${facultyId}&telegram_id=${telegramId}`;
+            }
         }
         
         async function login() {

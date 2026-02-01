@@ -323,7 +323,10 @@
     <div class="container">
         <div class="header">
             <h1>Управление проводящими собесы — <span class="faculty-name" id="facultyName">...</span></h1>
-            <button class="btn" onclick="showAddModal()">➕ Добавить проводящего</button>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <a href="/admin" class="btn btn-secondary" style="text-decoration: none;">← Назад к ответам</a>
+                <button class="btn" onclick="showAddModal()">➕ Добавить проводящего</button>
+            </div>
         </div>
         
         <div id="loading" class="loading">
@@ -380,15 +383,80 @@
             });
         }
         
-        // Получаем параметры из URL
+        // Получаем параметры из URL или localStorage
         const urlParams = new URLSearchParams(window.location.search);
-        facultyId = parseInt(urlParams.get('faculty_id'));
-        const telegramId = urlParams.get('telegram_id');
+        let telegramId = urlParams.get('telegram_id') || localStorage.getItem('admin_telegram_id');
+        facultyId = parseInt(urlParams.get('faculty_id') || localStorage.getItem('admin_faculty_id'));
         
         if (!facultyId || !telegramId) {
-            document.getElementById('loading').innerHTML = 'Ошибка: не указаны параметры faculty_id и telegram_id';
+            // Пробуем авторизоваться через API (если есть сохранённые данные)
+            if (localStorage.getItem('admin_username')) {
+                // Показываем форму авторизации
+                showAuthForm();
+            } else {
+                document.getElementById('loading').innerHTML = 'Ошибка: не указаны параметры faculty_id и telegram_id';
+            }
         } else {
+            // Сохраняем в localStorage для удобства
+            localStorage.setItem('admin_telegram_id', telegramId);
+            localStorage.setItem('admin_faculty_id', facultyId);
             loadData();
+        }
+        
+        function showAuthForm() {
+            document.getElementById('content').innerHTML = `
+                <div style="max-width: 400px; margin: 100px auto; padding: 2rem; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border);">
+                    <h2 style="margin-bottom: 1.5rem; text-align: center;">🔐 Вход</h2>
+                    <div class="form-group">
+                        <label>Логин (username в Telegram)</label>
+                        <input type="text" id="username-input" placeholder="@username или username">
+                    </div>
+                    <div class="form-group">
+                        <label>Пароль</label>
+                        <input type="password" id="password-input" placeholder="Пароль из бота">
+                    </div>
+                    <div id="login-error" style="color: var(--danger); font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
+                    <button class="btn" onclick="login()" style="width: 100%;">Войти</button>
+                </div>
+            `;
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        async function login() {
+            const username = document.getElementById('username-input').value.trim();
+            const password = document.getElementById('password-input').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    errorDiv.textContent = data.error || 'Ошибка входа';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                // Сохраняем данные
+                telegramId = data.telegram_id;
+                facultyId = data.faculty_id;
+                localStorage.setItem('admin_telegram_id', telegramId);
+                localStorage.setItem('admin_faculty_id', facultyId);
+                localStorage.setItem('admin_username', username);
+                
+                // Перезагружаем страницу
+                location.reload();
+            } catch (error) {
+                errorDiv.textContent = `Ошибка: ${error.message}`;
+                errorDiv.style.display = 'block';
+            }
         }
         
         async function loadData() {
