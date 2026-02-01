@@ -373,12 +373,22 @@ async def update_interviewer_schedule(
     # Удаляем старое расписание для этих дат
     if data.slots:
         dates = {slot.date for slot in data.slots}
-        await db.execute(
-            delete(InterviewerSchedule).where(
+        # Получаем все времена из слотов
+        times = {datetime.strptime(slot.time, "%H:%M").time() for slot in data.slots}
+        
+        # Удаляем старые записи
+        result = await db.execute(
+            select(InterviewerSchedule).where(
                 InterviewerSchedule.interviewer_id == interviewer_id,
-                InterviewerSchedule.date.in_(dates)
+                InterviewerSchedule.date.in_(dates),
+                InterviewerSchedule.time_slot.in_(times)
             )
         )
+        old_schedules = result.scalars().all()
+        for old_schedule in old_schedules:
+            await db.delete(old_schedule)
+        
+        await db.flush()  # Применяем удаление перед добавлением новых
     
     # Создаём новое расписание
     for slot in data.slots:
