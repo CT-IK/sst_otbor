@@ -57,6 +57,23 @@ def upgrade() -> None:
         SET old_interviewer_id = interviewer_id
     """)
     
+    # Удаляем дубликаты перед обновлением (оставляем только первую запись для каждой комбинации)
+    # Это нужно, чтобы избежать нарушения уникального ограничения uq_interviewer_date_time
+    op.execute("""
+        DELETE FROM interviewer_schedule isch1
+        WHERE isch1.id IN (
+            SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (
+                    PARTITION BY old_interviewer_id, date, time_slot 
+                    ORDER BY id
+                ) as rn
+                FROM interviewer_schedule
+                WHERE old_interviewer_id IS NOT NULL
+            ) t
+            WHERE t.rn > 1
+        )
+    """)
+    
     # Обновляем связи в interviewer_schedule
     op.execute("""
         UPDATE interviewer_schedule isch
