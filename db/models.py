@@ -235,6 +235,8 @@ class Interview(Base):
     faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
     slot_id: Mapped[int | None] = mapped_column(ForeignKey("interview_slots.id", ondelete="SET NULL"), nullable=True)
     interviewer_id: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)  # Назначенный проверяющий
+    interview_time_slot_id: Mapped[int | None] = mapped_column(ForeignKey("interview_time_slots.id", ondelete="SET NULL"), nullable=True)  # Связь с InterviewTimeSlot
+    reschedule_count: Mapped[int] = mapped_column(Integer, default=0)  # Количество перезаписей (максимум 2)
     status: Mapped[InterviewStatus] = mapped_column(
         SQLEnum(InterviewStatus), 
         default=InterviewStatus.SCHEDULED
@@ -249,6 +251,7 @@ class Interview(Base):
     slot = relationship("InterviewSlot", back_populates="interviews")
     time_slot_id: Mapped[int | None] = mapped_column(ForeignKey("time_slots.id", ondelete="SET NULL"), nullable=True)  # Новый временной слот
     time_slot = relationship("TimeSlot", back_populates="interviews", foreign_keys=[time_slot_id])
+    interview_time_slot = relationship("InterviewTimeSlot", foreign_keys=[interview_time_slot_id])
     interviewer = relationship("Administrator", foreign_keys=[interviewer_id])
 
 
@@ -466,8 +469,31 @@ class InterviewTimeSlot(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     faculty = relationship("Faculty")
+    interviews = relationship("Interview", foreign_keys="Interview.interview_time_slot_id", back_populates="interview_time_slot")
     
     __table_args__ = (
         UniqueConstraint('faculty_id', 'date', 'time', name='uq_faculty_date_time'),
+    )
+
+
+class InterviewInvitation(Base):
+    """
+    Отслеживание отправленных приглашений на собеседования.
+    Хранит информацию о том, кому было отправлено приглашение.
+    """
+    __tablename__ = "interview_invitations"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    sent_by: Mapped[int] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)  # Кто отправил
+    
+    user = relationship("User")
+    faculty = relationship("Faculty")
+    sender = relationship("Administrator")
+    
+    __table_args__ = (
+        UniqueConstraint('user_id', 'faculty_id', name='uq_user_faculty_invitation'),
     )
 
