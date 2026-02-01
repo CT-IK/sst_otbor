@@ -137,36 +137,46 @@ async def add_interviewer(
     if not faculty:
         raise HTTPException(status_code=404, detail="Факультет не найден")
     
-    # Проверяем, не добавлен ли уже
+    # Проверяем, не добавлен ли уже (telegram_id уникален глобально)
     result = await db.execute(
         select(Administrator).where(
-            Administrator.telegram_id == data.telegram_id,
-            Administrator.faculty_id == faculty_id,
-            Administrator.is_active == True
+            Administrator.telegram_id == data.telegram_id
         )
     )
     existing = result.scalars().first()
     
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Этот пользователь уже является администратором этого факультета"
+        if existing.is_active and existing.faculty_id == faculty_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Этот пользователь уже является администратором этого факультета"
+            )
+        elif existing.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Этот пользователь уже является администратором другого факультета (ID: {existing.faculty_id})"
+            )
+        else:
+            # Активируем существующего неактивного администратора
+            existing.faculty_id = faculty_id
+            existing.role = "reviewer"
+            existing.is_active = True
+            existing.added_by = telegram_id
+            interviewer = existing
+            await db.commit()
+            await db.refresh(interviewer)
+    else:
+        # Создаём нового администратора
+        interviewer = Administrator(
+            telegram_id=data.telegram_id,
+            faculty_id=faculty_id,
+            role="reviewer",  # Используем роль reviewer для проводящих
+            is_active=True,
+            added_by=telegram_id
         )
-    
-    # Получаем информацию о пользователе из Telegram (если возможно)
-    # В реальности нужно использовать Telegram Bot API
-    # Пока создаём с минимальной информацией
-    
-    interviewer = Administrator(
-        telegram_id=data.telegram_id,
-        faculty_id=faculty_id,
-        role="reviewer",  # Используем роль reviewer для проводящих
-        is_active=True,
-        added_by=telegram_id
-    )
-    db.add(interviewer)
-    await db.commit()
-    await db.refresh(interviewer)
+        db.add(interviewer)
+        await db.commit()
+        await db.refresh(interviewer)
     
     # Отправляем уведомление в бот
     try:
