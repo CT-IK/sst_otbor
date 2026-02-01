@@ -709,17 +709,21 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
             db.add(new_interview)
             reschedule_count = 0
         
-        await db.commit()
-        
-        # Получаем ID интервью после commit()
+        # Получаем ID интервью ДО commit() (чтобы избежать MissingGreenlet)
         interview_id = new_interview.id
         
-        # Получаем факультет для уведомления
+        await db.commit()
+        
+        # Получаем факультет для уведомления в новой сессии
+        video_chat_id = None
         async with async_session_maker() as db_notif:
             result = await db_notif.execute(
                 select(Faculty).where(Faculty.id == faculty_id_for_notification)
             )
             faculty = result.scalars().first()
+            # Сохраняем video_chat_id ДО закрытия сессии
+            if faculty:
+                video_chat_id = faculty.video_chat_id
         
         reschedule_info = ""
         # Показываем информацию о перезаписях только если это действительно перезапись
@@ -739,7 +743,7 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
         )
         
         # Отправляем уведомление в чат факультета
-        if faculty and faculty.video_chat_id:
+        if video_chat_id:
             try:
                 import httpx
                 bot_token = settings.telegram_bot_token
@@ -756,13 +760,13 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
                     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
                     async with httpx.AsyncClient() as client:
                         response = await client.post(url, json={
-                            "chat_id": faculty.video_chat_id,
+                            "chat_id": video_chat_id,
                             "text": notification_text,
                             "parse_mode": "HTML"
                         })
                         response.raise_for_status()
             except Exception as e:
-                logger.error(f"Ошибка отправки уведомления в чат {faculty.video_chat_id if faculty else None}: {e}")
+                logger.error(f"Ошибка отправки уведомления в чат {video_chat_id}: {e}")
         
         await state.clear()
 
