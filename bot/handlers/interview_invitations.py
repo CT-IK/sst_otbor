@@ -535,13 +535,14 @@ async def callback_select_time(callback: CallbackQuery, state: FSMContext, bot: 
             await callback.answer("Пользователь не найден", show_alert=True)
             return
         
-        # Проверяем существующие записи
+        # Проверяем существующие записи - ищем активную запись (SCHEDULED)
+        # Важно: ищем только активные записи, не отмененные
         result = await db.execute(
             select(Interview).where(
                 Interview.user_id == user.id,
                 Interview.faculty_id == slot.faculty_id,
-                Interview.status != InterviewStatus.CANCELLED
-            )
+                Interview.status == InterviewStatus.SCHEDULED
+            ).order_by(Interview.id.desc())
         )
         existing_interview = result.scalars().first()
         
@@ -640,13 +641,16 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
             await callback.answer("Пользователь не найден", show_alert=True)
             return
         
-        # Проверяем существующие записи
+        # Получаем username из Telegram объекта
+        telegram_username = callback.from_user.username if callback.from_user.username else None
+        
+        # Проверяем существующие записи - ищем активную запись (SCHEDULED)
         result = await db.execute(
             select(Interview).where(
                 Interview.user_id == user.id,
                 Interview.faculty_id == slot.faculty_id,
-                Interview.status != InterviewStatus.CANCELLED
-            )
+                Interview.status == InterviewStatus.SCHEDULED
+            ).order_by(Interview.id.desc())
         )
         existing_interview = result.scalars().first()
         
@@ -657,7 +661,7 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
         
         # Сохраняем данные пользователя ДО commit()
         user_fio = ""
-        username = "не указан"
+        username = telegram_username if telegram_username else "не указан"
         parts = []
         if user.first_name:
             parts.append(user.first_name)
@@ -666,36 +670,35 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
         if user.surname:
             parts.append(user.surname)
         user_fio = " ".join(parts) if parts else f"ID {user.telegram_id}"
-        if user.username:
-            username = user.username
         
         if existing_interview:
             # Перезапись
-            if existing_interview.reschedule_count >= 2:
+            # Сохраняем reschedule_count ДО изменения
+            old_reschedule_count = existing_interview.reschedule_count
+            
+            if old_reschedule_count >= 2:
                 await callback.answer(
-                    "❌ Вы уже использовали все возможности перезаписи",
+                    "❌ Вы уже использовали все возможности перезаписи (максимум 2 раза)",
                     show_alert=True
                 )
                 return
             
-            # Сохраняем reschedule_count ДО изменения
-            old_reschedule_count = existing_interview.reschedule_count
-            
             # Отменяем старую запись
             existing_interview.status = InterviewStatus.CANCELLED
             
-            # Создаём новую запись
+            # Создаём новую запись с увеличенным счетчиком
+            new_reschedule_count = old_reschedule_count + 1
             new_interview = Interview(
                 user_id=user.id,
                 faculty_id=faculty_id_for_notification,
                 interview_time_slot_id=slot_id,
-                reschedule_count=old_reschedule_count + 1,
+                reschedule_count=new_reschedule_count,
                 status=InterviewStatus.SCHEDULED
             )
             db.add(new_interview)
-            reschedule_count = old_reschedule_count + 1
+            reschedule_count = new_reschedule_count
         else:
-            # Новая запись
+            # Новая запись (первая запись, не перезапись)
             new_interview = Interview(
                 user_id=user.id,
                 faculty_id=faculty_id_for_notification,
@@ -719,9 +722,13 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
             faculty = result.scalars().first()
         
         reschedule_info = ""
+        # Показываем информацию о перезаписях только если это действительно перезапись
         if existing_interview and reschedule_count > 0:
             remaining = 2 - reschedule_count
-            reschedule_info = f"\n\n⚠️ Осталось перезаписей: <b>{remaining}</b>"
+            if remaining >= 0:
+                reschedule_info = f"\n\n⚠️ Осталось перезаписей: <b>{remaining}</b>"
+            else:
+                reschedule_info = f"\n\n⚠️ Вы использовали все возможности перезаписи"
         
         await callback.message.edit_text(
             f"✅ <b>Запись подтверждена!</b>\n\n"

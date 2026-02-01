@@ -329,9 +329,16 @@ async def assign_interviewers(
         )
     
     # Сохраняем нужные значения до commit
+    # interview уже загружен с selectinload на строке 299
     slot = interview.interview_time_slot
     user = interview.user
     
+    if not slot:
+        raise HTTPException(status_code=404, detail="Слот собеседования не найден")
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    # Сохраняем все значения в локальные переменные ДО commit()
     slot_date = slot.date
     slot_time = slot.time
     
@@ -343,10 +350,11 @@ async def assign_interviewers(
     if user.surname:
         parts.append(user.surname)
     user_fio = " ".join(parts) if parts else f"ID {user.telegram_id}"
-    username = user.username or "не указан"
+    # В модели User нет поля username, используем telegram_id для отображения
+    username = f"{user.telegram_id}" if user.telegram_id else "не указан"
     
-    # Сохраняем telegram_id проводящих
-    interviewer_telegram_ids = [i.telegram_id for i in interviewers]
+    # Сохраняем telegram_id проводящих ДО commit (важно: сохраняем в список)
+    interviewer_telegram_ids = [int(i.telegram_id) for i in interviewers if i.telegram_id]
     
     # Удаляем старые назначения
     result = await db.execute(
