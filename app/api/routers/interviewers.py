@@ -370,6 +370,9 @@ async def update_interviewer_schedule(
     
     admin = await verify_head_admin(interviewer.faculty_id, telegram_id, db)
     
+    # Сохраняем имя до commit (чтобы избежать expired объекта)
+    interviewer_name = interviewer.name or interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
+    
     # Удаляем старое расписание для этих дат
     if data.slots:
         dates = {slot.date for slot in data.slots}
@@ -427,8 +430,7 @@ async def update_interviewer_schedule(
     else:
         slots = []
     
-    interviewer_name = interviewer.name or interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
-    
+    # Используем сохранённое имя (не обращаемся к expired объекту)
     return ScheduleResponse(
         interviewer_id=interviewer.id,
         interviewer_name=interviewer_name,
