@@ -13,16 +13,34 @@ async def cleanup():
         except Exception as e:
             print(f'⚠️  Ошибка при удалении interviewers: {e}')
         
-        # Удаляем временные колонки если существуют
+        # Проверяем и удаляем временные колонки если таблицы существуют
         try:
-            await conn.execute(text('ALTER TABLE interviewer_schedule DROP COLUMN IF EXISTS old_interviewer_id'))
-            print('✅ Временная колонка old_interviewer_id удалена из interviewer_schedule')
+            result = await conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables 
+                    WHERE table_name = 'interviewer_schedule'
+                )
+            """))
+            if result.scalar():
+                await conn.execute(text('ALTER TABLE interviewer_schedule DROP COLUMN IF EXISTS old_interviewer_id'))
+                print('✅ Временная колонка old_interviewer_id удалена из interviewer_schedule')
+            else:
+                print('ℹ️  Таблица interviewer_schedule не существует, пропускаем')
         except Exception as e:
             print(f'⚠️  Ошибка при удалении колонки из interviewer_schedule: {e}')
         
         try:
-            await conn.execute(text('ALTER TABLE interview_interviewers DROP COLUMN IF EXISTS old_interviewer_id'))
-            print('✅ Временная колонка old_interviewer_id удалена из interview_interviewers')
+            result = await conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables 
+                    WHERE table_name = 'interview_interviewers'
+                )
+            """))
+            if result.scalar():
+                await conn.execute(text('ALTER TABLE interview_interviewers DROP COLUMN IF EXISTS old_interviewer_id'))
+                print('✅ Временная колонка old_interviewer_id удалена из interview_interviewers')
+            else:
+                print('ℹ️  Таблица interview_interviewers не существует, пропускаем')
         except Exception as e:
             print(f'⚠️  Ошибка при удалении колонки из interview_interviewers: {e}')
         
