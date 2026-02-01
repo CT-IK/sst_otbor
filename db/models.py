@@ -253,6 +253,7 @@ class Interview(Base):
     time_slot = relationship("TimeSlot", back_populates="interviews", foreign_keys=[time_slot_id])
     interview_time_slot = relationship("InterviewTimeSlot", foreign_keys=[interview_time_slot_id])
     interviewer = relationship("Administrator", foreign_keys=[interviewer_id])
+    assigned_interviewers = relationship("InterviewInterviewer", foreign_keys="InterviewInterviewer.interview_id", back_populates="interview", cascade="all, delete-orphan")
 
 
 class SlotAvailability(Base):
@@ -428,6 +429,34 @@ class AdminActionLog(Base):
     faculty = relationship("Faculty")
 
 
+class Interviewer(Base):
+    """
+    Проводящие собеседования.
+    Могут быть как администраторами, так и обычными людьми, назначенными Head Admin.
+    """
+    __tablename__ = "interviewers"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)  # Telegram ID проводящего
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Отображаемое имя
+    username: Mapped[str | None] = mapped_column(String(50), nullable=True)  # @username из Telegram
+    full_name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Полное имя из Telegram
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # Активен ли проводящий
+    added_by: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)  # Кто добавил (Head Admin)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    faculty = relationship("Faculty")
+    adder = relationship("Administrator", foreign_keys=[added_by])
+    schedule = relationship("InterviewerSchedule", back_populates="interviewer", cascade="all, delete-orphan")
+    interview_assignments = relationship("InterviewInterviewer", back_populates="interviewer", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        UniqueConstraint('telegram_id', 'faculty_id', name='uq_interviewer_telegram_faculty'),
+    )
+
+
 class InterviewerSchedule(Base):
     """
     Расписание занятости проводящих собеседования.
@@ -436,7 +465,7 @@ class InterviewerSchedule(Base):
     __tablename__ = "interviewer_schedule"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    interviewer_id: Mapped[int] = mapped_column(ForeignKey("administrators.id", ondelete="CASCADE"))
+    interviewer_id: Mapped[int] = mapped_column(ForeignKey("interviewers.id", ondelete="CASCADE"))
     faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
     date: Mapped[date] = mapped_column(Date)  # Дата (2-7 февраля)
     time_slot: Mapped[Time] = mapped_column(Time)  # Время (10:00-21:00)
@@ -445,7 +474,7 @@ class InterviewerSchedule(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
-    interviewer = relationship("Administrator", foreign_keys=[interviewer_id])
+    interviewer = relationship("Interviewer", back_populates="schedule")
     faculty = relationship("Faculty")
     
     __table_args__ = (
@@ -495,5 +524,27 @@ class InterviewInvitation(Base):
     
     __table_args__ = (
         UniqueConstraint('user_id', 'faculty_id', name='uq_user_faculty_invitation'),
+    )
+
+
+class InterviewInterviewer(Base):
+    """
+    Связь многие-ко-многим между Interview и Interviewer.
+    Позволяет назначить несколько проводящих на одно собеседование.
+    """
+    __tablename__ = "interview_interviewers"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    interview_id: Mapped[int] = mapped_column(ForeignKey("interviews.id", ondelete="CASCADE"))
+    interviewer_id: Mapped[int] = mapped_column(ForeignKey("interviewers.id", ondelete="CASCADE"))
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    assigned_by: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="SET NULL"), nullable=True)  # Кто назначил
+    
+    interview = relationship("Interview", foreign_keys=[interview_id], back_populates="assigned_interviewers")
+    interviewer = relationship("Interviewer", back_populates="interview_assignments")
+    assigner = relationship("Administrator", foreign_keys=[assigned_by])
+    
+    __table_args__ = (
+        UniqueConstraint('interview_id', 'interviewer_id', name='uq_interview_interviewer'),
     )
 

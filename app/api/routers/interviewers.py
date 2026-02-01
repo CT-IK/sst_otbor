@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from config import settings
 from db.session import get_db
 from db.models import (
-    Faculty, Administrator, InterviewerSchedule
+    Faculty, Administrator, InterviewerSchedule, Interviewer
 )
 
 logger = logging.getLogger(__name__)
@@ -145,46 +145,58 @@ async def add_interviewer(
     if not faculty:
         raise HTTPException(status_code=404, detail="Факультет не найден")
     
-    # Проверяем, не добавлен ли уже (telegram_id уникален глобально)
+    # Проверяем, не добавлен ли уже проводящий для этого факультета
     result = await db.execute(
-        select(Administrator).where(
-            Administrator.telegram_id == data.telegram_id
+        select(Interviewer).where(
+            Interviewer.telegram_id == data.telegram_id,
+            Interviewer.faculty_id == faculty_id
         )
     )
-    existing = result.scalars().first()
+    existing_interviewer = result.scalars().first()
     
-    is_new_interviewer = True  # Флаг для отправки уведомления
+    is_new_interviewer = True
     
-    if existing:
-        if existing.is_active and existing.faculty_id == faculty_id:
-            # Уже является администратором этого факультета (head_admin или reviewer)
-            # Просто возвращаем его как проводящего
-            interviewer = existing
-            is_new_interviewer = False  # Не отправляем уведомление
-        elif existing.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Этот пользователь уже является администратором другого факультета (ID: {existing.faculty_id})"
-            )
+    if existing_interviewer:
+        if existing_interviewer.is_active:
+            # Уже является проводящим этого факультета
+            interviewer = existing_interviewer
+            is_new_interviewer = False
         else:
-            # Активируем существующего неактивного администратора
-            # Не меняем роль, если он уже head_admin
-            if existing.role != "head_admin":
-                existing.role = "reviewer"
-            existing.faculty_id = faculty_id
-            existing.is_active = True
-            existing.added_by = telegram_id
-            interviewer = existing
+            # Активируем существующего неактивного проводящего
+            existing_interviewer.is_active = True
+            interviewer = existing_interviewer
             await db.commit()
             await db.refresh(interviewer)
     else:
-        # Создаём нового администратора (по умолчанию reviewer)
-        interviewer = Administrator(
+        # Создаём нового проводящего
+        # Пытаемся получить информацию о пользователе из Telegram
+        username = None
+        full_name = None
+        try:
+            import httpx
+            bot_token = settings.telegram_bot_token
+            if bot_token:
+                url = f"https://api.telegram.org/bot{bot_token}/getChat"
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(url, json={"chat_id": data.telegram_id})
+                    if response.status_code == 200:
+                        chat_data = response.json()
+                        if chat_data.get("ok"):
+                            user_data = chat_data.get("result", {})
+                            username = user_data.get("username")
+                            first_name = user_data.get("first_name", "")
+                            last_name = user_data.get("last_name", "")
+                            full_name = f"{first_name} {last_name}".strip() if last_name else first_name
+        except Exception as e:
+            logger.warning(f"Не удалось получить информацию о пользователе {data.telegram_id}: {e}")
+        
+        interviewer = Interviewer(
             telegram_id=data.telegram_id,
             faculty_id=faculty_id,
-            role="reviewer",  # По умолчанию reviewer, но может быть и head_admin
+            username=username,
+            full_name=full_name,
             is_active=True,
-            added_by=telegram_id
+            added_by=admin.id
         )
         db.add(interviewer)
         await db.commit()
@@ -210,6 +222,9 @@ async def add_interviewer(
         except Exception as e:
             logger.warning(f"Не удалось отправить уведомление проводящему {data.telegram_id}: {e}")
     
+    # Формируем имя для ответа
+    display_name = interviewer.name or interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
+    
     return InterviewerResponse(
         id=interviewer.id,
         telegram_id=interviewer.telegram_id,
@@ -217,7 +232,7 @@ async def add_interviewer(
         full_name=interviewer.full_name,
         name=interviewer.name,
         faculty_id=interviewer.faculty_id,
-        role=interviewer.role,
+        role="interviewer",  # Все проводящие имеют роль "interviewer"
         created_at=interviewer.created_at.isoformat()
     )
 
@@ -240,14 +255,14 @@ async def get_interviewers(
     if not faculty:
         raise HTTPException(status_code=404, detail="Факультет не найден")
     
-    # Получаем всех проводящих (и head_admin, и reviewer)
+    # Получаем всех активных проводящих факультета
     result = await db.execute(
-        select(Administrator).where(
-            Administrator.faculty_id == faculty_id,
-            Administrator.is_active == True
-        ).order_by(Administrator.created_at)
+        select(Interviewer).where(
+            Interviewer.faculty_id == faculty_id,
+            Interviewer.is_active == True
+        ).order_by(Interviewer.created_at)
     )
-    interviewers = result.scalars().all()
+    interviewers_list = result.scalars().all()
     
     interviewer_responses = [
         InterviewerResponse(
@@ -257,10 +272,10 @@ async def get_interviewers(
             full_name=i.full_name,
             name=i.name,
             faculty_id=i.faculty_id,
-            role=i.role,
+            role="interviewer",
             created_at=i.created_at.isoformat()
         )
-        for i in interviewers
+        for i in interviewers_list
     ]
     
     return InterviewersListResponse(
@@ -282,7 +297,7 @@ async def delete_interviewer(
     Только для Head Admin.
     """
     result = await db.execute(
-        select(Administrator).where(Administrator.id == interviewer_id)
+        select(Interviewer).where(Interviewer.id == interviewer_id)
     )
     interviewer = result.scalars().first()
     
@@ -309,7 +324,7 @@ async def get_interviewer_schedule(
     Доступно для Head Admin.
     """
     result = await db.execute(
-        select(Administrator).where(Administrator.id == interviewer_id)
+        select(Interviewer).where(Interviewer.id == interviewer_id)
     )
     interviewer = result.scalars().first()
     
@@ -361,7 +376,7 @@ async def update_interviewer_schedule(
     Только для Head Admin.
     """
     result = await db.execute(
-        select(Administrator).where(Administrator.id == interviewer_id)
+        select(Interviewer).where(Interviewer.id == interviewer_id)
     )
     interviewer = result.scalars().first()
     
@@ -371,7 +386,8 @@ async def update_interviewer_schedule(
     admin = await verify_head_admin(interviewer.faculty_id, telegram_id, db)
     
     # Сохраняем все нужные значения до commit (чтобы избежать expired объекта)
-    interviewer_id = interviewer.id
+    current_interviewer_id = interviewer.id
+    current_faculty_id = interviewer.faculty_id
     interviewer_name = interviewer.name or interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
     
     # Удаляем старое расписание для этих дат
@@ -383,7 +399,7 @@ async def update_interviewer_schedule(
         # Удаляем старые записи
         result = await db.execute(
             select(InterviewerSchedule).where(
-                InterviewerSchedule.interviewer_id == interviewer_id,
+                InterviewerSchedule.interviewer_id == current_interviewer_id,
                 InterviewerSchedule.date.in_(dates),
                 InterviewerSchedule.time_slot.in_(times)
             )
@@ -397,8 +413,8 @@ async def update_interviewer_schedule(
     # Создаём новое расписание
     for slot in data.slots:
         schedule = InterviewerSchedule(
-            interviewer_id=interviewer_id,
-            faculty_id=interviewer.faculty_id,
+            interviewer_id=current_interviewer_id,
+            faculty_id=current_faculty_id,
             date=slot.date,
             time_slot=datetime.strptime(slot.time, "%H:%M").time(),
             is_available=slot.is_available,
@@ -433,7 +449,7 @@ async def update_interviewer_schedule(
     
     # Используем сохранённые значения (не обращаемся к expired объекту)
     return ScheduleResponse(
-        interviewer_id=interviewer_id,
+        interviewer_id=current_interviewer_id,
         interviewer_name=interviewer_name,
         slots=slots,
         total=len(slots)
@@ -452,7 +468,7 @@ async def update_interviewer_name(
     Только для Head Admin.
     """
     result = await db.execute(
-        select(Administrator).where(Administrator.id == interviewer_id)
+        select(Interviewer).where(Interviewer.id == interviewer_id)
     )
     interviewer = result.scalars().first()
     
@@ -473,6 +489,6 @@ async def update_interviewer_name(
         full_name=interviewer.full_name,
         name=interviewer.name,
         faculty_id=interviewer.faculty_id,
-        role=interviewer.role,
+        role="interviewer",
         created_at=interviewer.created_at.isoformat()
     )

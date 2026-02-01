@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.core.redis import redis_client
-from app.api.routers import questionnaire, admin_stats, interview_slots, interview_days, interviewers, interview_slots_management, google_sheets, video_upload
+from app.api.routers import questionnaire, admin_stats, interview_slots, interview_days, interviewers, interview_slots_management, google_sheets, video_upload, interview_assignments
 
 
 @asynccontextmanager
@@ -43,6 +43,7 @@ app.include_router(google_sheets.router, prefix="/api/v1")
 app.include_router(video_upload.router, prefix="/api/v1")
 app.include_router(interviewers.router, prefix="/api/v1")
 app.include_router(interview_slots_management.router, prefix="/api/v1")
+app.include_router(interview_assignments.router, prefix="/api/v1")
 
 # Раздаём статику (CSS, JS) - ДО HTML роутов
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
@@ -100,6 +101,15 @@ async def interview_slots_page():
     if slots_file.exists():
         return FileResponse(slots_file)
     return {"message": "Interview slots page not found"}
+
+
+@app.get("/interview-assignments")
+async def interview_assignments_page():
+    """Страница назначения проводящих на собеседования"""
+    assignments_file = FRONTEND_DIR / "interview-assignments.html"
+    if assignments_file.exists():
+        return FileResponse(assignments_file)
+    return {"message": "Interview assignments page not found"}
 
 
 @app.get("/healthz")

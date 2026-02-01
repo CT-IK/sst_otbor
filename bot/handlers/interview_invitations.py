@@ -21,6 +21,7 @@ from db.models import (
     Administrator, Faculty, HomeVideo, User, InterviewTimeSlot, 
     Interview, InterviewInvitation, InterviewStatus
 )
+from config import settings
 
 logger = logging.getLogger(__name__)
 invitations_router = Router()
@@ -52,6 +53,18 @@ def format_date(d: date) -> str:
     """Форматирование даты"""
     days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
     return f"{d.day}.{d.month} ({days[d.weekday()]})"
+
+
+def is_slot_available_min_10_hours(slot_date: date, slot_time: time, now: datetime) -> bool:
+    """
+    Проверяет, что до слота осталось не менее 10 часов.
+    Возвращает True, если можно записаться, False - если слишком поздно.
+    """
+    slot_datetime = datetime.combine(slot_date, slot_time)
+    time_diff = slot_datetime - now
+    
+    # Проверяем, что разница не менее 10 часов (36000 секунд)
+    return time_diff.total_seconds() >= 10 * 3600
 
 
 # === Команда для рассылки приглашений ===
@@ -127,9 +140,13 @@ async def cmd_send_invitations(message: Message, bot: Bot):
         )
         all_slots = result.scalars().all()
         
-        # Фильтруем слоты с учётом занятых мест
+        # Фильтруем слоты с учётом занятых мест и ограничения 10 часов
         available_slots = []
         for slot in all_slots:
+            # Проверяем ограничение 10 часов
+            if not is_slot_available_min_10_hours(slot.date, slot.time, now):
+                continue
+            
             # Подсчитываем количество записей на этот слот
             result = await db.execute(
                 select(func.count(Interview.id)).where(
@@ -265,9 +282,13 @@ async def callback_select_date(callback: CallbackQuery, state: FSMContext, bot: 
             await callback.answer("Нет доступных слотов на эту дату", show_alert=True)
             return
         
-        # Проверяем текущие записи для подсчёта занятых мест
+        # Проверяем текущие записи для подсчёта занятых мест и ограничение 10 часов
         slot_info = []
         for slot in slots:
+            # Проверяем ограничение 10 часов
+            if not is_slot_available_min_10_hours(slot.date, slot.time, now):
+                continue
+            
             # Подсчитываем количество записей на этот слот
             result = await db.execute(
                 select(func.count(Interview.id)).where(
@@ -282,7 +303,7 @@ async def callback_select_date(callback: CallbackQuery, state: FSMContext, bot: 
                 slot_info.append((slot, available))
         
         if not slot_info:
-            await callback.answer("Все слоты на эту дату заняты", show_alert=True)
+            await callback.answer("Все слоты на эту дату заняты или недоступны (менее 10 часов до начала)", show_alert=True)
             return
         
         # Формируем клавиатуру с временами
@@ -306,6 +327,7 @@ async def callback_select_date(callback: CallbackQuery, state: FSMContext, bot: 
             f"📅 <b>Выбрана дата: {format_date(selected_date)}</b>\n\n"
             f"Выберите удобное время:\n\n"
             f"⚠️ <b>Напоминание:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+            f"⚠️ <b>Ограничение:</b> Запись доступна не менее чем за <b>10 часов</b> до начала.\n\n"
             f"❓ В случае технических неполадок обращайтесь к @yanejettt",
             reply_markup=keyboard,
             parse_mode="HTML"
@@ -428,6 +450,15 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
             await callback.answer("Слот не найден", show_alert=True)
             return
         
+        # Проверяем ограничение 10 часов
+        now = datetime.now()
+        if not is_slot_available_min_10_hours(slot.date, slot.time, now):
+            await callback.answer(
+                "❌ Нельзя записаться менее чем за 10 часов до собеседования",
+                show_alert=True
+            )
+            return
+        
         # Проверяем доступность ещё раз
         result = await db.execute(
             select(func.count(Interview.id)).where(
@@ -500,6 +531,34 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
         slot_date = slot.date
         slot_time = slot.time
         reschedule_count = new_interview.reschedule_count
+        interview_id = new_interview.id
+        faculty_id_for_notification = slot.faculty_id
+        
+        # Получаем факультет и пользователя для уведомления
+        result = await db.execute(
+            select(Faculty).where(Faculty.id == faculty_id_for_notification)
+        )
+        faculty = result.scalars().first()
+        
+        result = await db.execute(
+            select(User).where(User.id == user.id)
+        )
+        user_obj = result.scalars().first()
+        
+        # Формируем ФИО пользователя
+        user_fio = ""
+        username = "не указан"
+        if user_obj:
+            parts = []
+            if user_obj.first_name:
+                parts.append(user_obj.first_name)
+            if user_obj.second_name:
+                parts.append(user_obj.second_name)
+            if user_obj.surname:
+                parts.append(user_obj.surname)
+            user_fio = " ".join(parts) if parts else f"ID {user_obj.telegram_id}"
+            if user_obj.username:
+                username = user_obj.username
         
         reschedule_info = ""
         if existing_interview:
@@ -513,6 +572,32 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
             f"Мы ждём вас на собеседовании!{reschedule_info}",
             parse_mode="HTML"
         )
+        
+        # Отправляем уведомление в чат факультета
+        if faculty and faculty.video_chat_id:
+            try:
+                import httpx
+                bot_token = settings.telegram_bot_token
+                if bot_token:
+                    notification_text = (
+                        f"📝 <b>Новая запись на собеседование</b>\n\n"
+                        f"👤 <b>Кандидат:</b> {user_fio}\n"
+                        f"📱 Username: @{username}\n"
+                        f"📅 <b>Дата:</b> {format_date(slot_date)}\n"
+                        f"🕐 <b>Время:</b> {slot_time.strftime('%H:%M')}\n\n"
+                        f"ID записи: {interview_id}"
+                    )
+                    
+                    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(url, json={
+                            "chat_id": faculty.video_chat_id,
+                            "text": notification_text,
+                            "parse_mode": "HTML"
+                        })
+                        response.raise_for_status()
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления в чат {faculty.video_chat_id if faculty else None}: {e}")
         
         await state.clear()
 
@@ -544,22 +629,40 @@ async def callback_back_to_dates(callback: CallbackQuery, state: FSMContext, bot
             await callback.answer("Видео не найдено", show_alert=True)
             return
         
-        # Получаем доступные даты
-        now = datetime.now().date()
+        # Получаем доступные даты с учётом ограничения 10 часов
+        now = datetime.now()
         result = await db.execute(
-            select(InterviewTimeSlot.date).where(
+            select(InterviewTimeSlot).where(
                 InterviewTimeSlot.faculty_id == video.faculty_id,
                 InterviewTimeSlot.max_participants > 0,
                 or_(
-                    InterviewTimeSlot.date > now,
+                    InterviewTimeSlot.date > now.date(),
                     and_(
-                        InterviewTimeSlot.date == now,
-                        InterviewTimeSlot.time >= datetime.now().time()
+                        InterviewTimeSlot.date == now.date(),
+                        InterviewTimeSlot.time >= now.time()
                     )
                 )
-            ).distinct().order_by(InterviewTimeSlot.date)
+            ).order_by(InterviewTimeSlot.date, InterviewTimeSlot.time)
         )
-        dates = [row[0] for row in result.all()]
+        all_slots = result.scalars().all()
+        
+        # Фильтруем по ограничению 10 часов и проверяем доступность мест
+        available_dates = set()
+        for slot in all_slots:
+            if is_slot_available_min_10_hours(slot.date, slot.time, now):
+                # Проверяем доступность мест
+                result = await db.execute(
+                    select(func.count(Interview.id)).where(
+                        Interview.interview_time_slot_id == slot.id,
+                        Interview.status != InterviewStatus.CANCELLED
+                    )
+                )
+                booked_count = result.scalar() or 0
+                available = slot.max_participants - booked_count
+                if available > 0:
+                    available_dates.add(slot.date)
+        
+        dates = sorted(list(available_dates))
         
         if not dates:
             await callback.answer("Нет доступных дат", show_alert=True)
@@ -588,6 +691,7 @@ async def callback_back_to_dates(callback: CallbackQuery, state: FSMContext, bot
             f"🎯 <b>Выберите дату для записи на собеседование</b>\n\n"
             f"Факультет: <b>{faculty_name}</b>\n\n"
             f"⚠️ <b>Важно:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+            f"⚠️ <b>Ограничение:</b> Запись доступна не менее чем за <b>10 часов</b> до начала.\n\n"
             f"❓ В случае технических неполадок обращайтесь к @yanejettt",
             reply_markup=keyboard,
             parse_mode="HTML"
@@ -647,9 +751,13 @@ async def callback_back_to_time(callback: CallbackQuery, state: FSMContext, bot:
             await callback.answer("Нет доступных слотов на эту дату", show_alert=True)
             return
         
-        # Проверяем текущие записи для подсчёта занятых мест
+        # Проверяем текущие записи для подсчёта занятых мест и ограничение 10 часов
         slot_info = []
         for slot in slots:
+            # Проверяем ограничение 10 часов
+            if not is_slot_available_min_10_hours(slot.date, slot.time, now):
+                continue
+            
             # Подсчитываем количество записей на этот слот
             result = await db.execute(
                 select(func.count(Interview.id)).where(
@@ -664,7 +772,7 @@ async def callback_back_to_time(callback: CallbackQuery, state: FSMContext, bot:
                 slot_info.append((slot, available))
         
         if not slot_info:
-            await callback.answer("Все слоты на эту дату заняты", show_alert=True)
+            await callback.answer("Все слоты на эту дату заняты или недоступны (менее 10 часов до начала)", show_alert=True)
             return
         
         # Формируем клавиатуру с временами
@@ -688,6 +796,7 @@ async def callback_back_to_time(callback: CallbackQuery, state: FSMContext, bot:
             f"📅 <b>Выбрана дата: {format_date(selected_date)}</b>\n\n"
             f"Выберите удобное время:\n\n"
             f"⚠️ <b>Напоминание:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+            f"⚠️ <b>Ограничение:</b> Запись доступна не менее чем за <b>10 часов</b> до начала.\n\n"
             f"❓ В случае технических неполадок обращайтесь к @yanejettt",
             reply_markup=keyboard,
             parse_mode="HTML"

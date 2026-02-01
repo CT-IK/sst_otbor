@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from config import settings
 from db.session import get_db
 from db.models import (
-    Faculty, Administrator, InterviewerSchedule, InterviewTimeSlot
+    Faculty, Administrator, InterviewerSchedule, InterviewTimeSlot, Interviewer
 )
 
 logger = logging.getLogger(__name__)
@@ -159,9 +159,9 @@ async def get_all_slots(
     interviewers_map = {}
     if interviewer_ids:
         result = await db.execute(
-            select(Administrator).where(
-                Administrator.id.in_(interviewer_ids),
-                Administrator.is_active == True
+            select(Interviewer).where(
+                Interviewer.id.in_(interviewer_ids),
+                Interviewer.is_active == True
             )
         )
         for interviewer in result.scalars().all():
@@ -296,9 +296,9 @@ async def update_slot(
     interviewers_list = []
     if interviewer_ids:
         result = await db.execute(
-            select(Administrator).where(
-                Administrator.id.in_(interviewer_ids),
-                Administrator.is_active == True
+            select(Interviewer).where(
+                Interviewer.id.in_(interviewer_ids),
+                Interviewer.is_active == True
             )
         )
         for interviewer in result.scalars().all():
