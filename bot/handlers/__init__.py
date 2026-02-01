@@ -9,6 +9,7 @@ from bot.handlers.video_stage import video_stage_router
 from bot.handlers.surveys import surveys_router
 from bot.handlers.interviews import interviews_router
 from bot.handlers.interview_invitations import invitations_router
+from bot.handlers.faculty_broadcast import faculty_broadcast_router
 
-__all__ = ["admin_router", "user_router", "questions_router", "cleanup_router", "superadmin_router", "reviewers_router", "broadcast_router", "video_stage_router", "surveys_router", "interviews_router", "invitations_router"]
+__all__ = ["admin_router", "user_router", "questions_router", "cleanup_router", "superadmin_router", "reviewers_router", "broadcast_router", "video_stage_router", "surveys_router", "interviews_router", "invitations_router", "faculty_broadcast_router"]
 

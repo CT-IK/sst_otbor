@@ -17,7 +17,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from config import settings
-from bot.handlers import admin_router, user_router, questions_router, cleanup_router, superadmin_router, reviewers_router, broadcast_router, video_stage_router, surveys_router, interviews_router, invitations_router
+from bot.handlers import admin_router, user_router, questions_router, cleanup_router, superadmin_router, reviewers_router, broadcast_router, video_stage_router, surveys_router, interviews_router, invitations_router, faculty_broadcast_router
 
 # Логирование
 logging.basicConfig(
@@ -300,6 +300,7 @@ async def main():
     dp.include_router(reviewers_router)   # Управление проверяющими
     dp.include_router(interviews_router)  # Управление собеседованиями
     dp.include_router(invitations_router)  # Приглашения на собеседования
+    dp.include_router(faculty_broadcast_router)  # Универсальная рассылка для факультета
     dp.include_router(broadcast_router)   # Рассылки (только для head_admin)
     dp.include_router(video_stage_router)  # Второй этап - сбор видео
     dp.include_router(admin_router)

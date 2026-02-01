@@ -183,6 +183,145 @@ async def cmd_send_invitations(message: Message, bot: Bot):
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
+        # Отправляем приглашения с стандартным сообщением
+        await send_invitations_with_custom_message(
+            faculty_id=faculty_id,
+            admin_telegram_id=message.from_user.id,
+            custom_message=None,
+            message_entities=None,
+            bot=bot,
+            update_message=message
+        )
+
+
+async def send_invitations_with_custom_message(
+    faculty_id: int,
+    admin_telegram_id: int,
+    custom_message: str | None,
+    message_entities: list | None,
+    bot: Bot,
+    update_message: Message | None = None
+):
+    """
+    Рассылка приглашений на собеседования с возможностью кастомного сообщения.
+    
+    Args:
+        faculty_id: ID факультета
+        admin_telegram_id: Telegram ID администратора
+        custom_message: Кастомное сообщение (если None, используется стандартное)
+        message_entities: HTML entities из оригинального сообщения
+        bot: Экземпляр бота
+        update_message: Сообщение для обновления статуса (опционально)
+    """
+    async with async_session_maker() as db:
+        # Получаем факультет
+        result = await db.execute(select(Faculty).where(Faculty.id == faculty_id))
+        faculty = result.scalars().first()
+        
+        if not faculty:
+            if update_message:
+                await update_message.edit_text("❌ Факультет не найден")
+            return
+        
+        faculty_name = faculty.name
+        
+        # Получаем всех пользователей с видео для этого факультета
+        result = await db.execute(
+            select(User).join(HomeVideo).where(
+                HomeVideo.faculty_id == faculty_id
+            ).distinct()
+        )
+        users_with_videos = result.scalars().all()
+        
+        if not users_with_videos:
+            if update_message:
+                await update_message.edit_text("❌ Нет пользователей с загруженными видео")
+            return
+        
+        # Получаем список тех, кому уже отправляли приглашения
+        result = await db.execute(
+            select(InterviewInvitation.user_id).where(
+                InterviewInvitation.faculty_id == faculty_id
+            )
+        )
+        already_invited = {row[0] for row in result.all()}
+        
+        # Фильтруем: отправляем только тем, кому ещё не отправляли
+        users_to_invite = [u for u in users_with_videos if u.id not in already_invited]
+        
+        if not users_to_invite:
+            if update_message:
+                await update_message.edit_text("✅ Все пользователи с видео уже получили приглашения")
+            return
+        
+        # Получаем доступные слоты (только с местами > 0 и будущие)
+        now = datetime.now()
+        result = await db.execute(
+            select(InterviewTimeSlot).where(
+                InterviewTimeSlot.faculty_id == faculty_id,
+                InterviewTimeSlot.max_participants > 0,
+                or_(
+                    InterviewTimeSlot.date > now.date(),
+                    and_(
+                        InterviewTimeSlot.date == now.date(),
+                        InterviewTimeSlot.time >= now.time()
+                    )
+                )
+            ).order_by(InterviewTimeSlot.date, InterviewTimeSlot.time)
+        )
+        all_slots = result.scalars().all()
+        
+        # Фильтруем слоты с учётом занятых мест и ограничения 10 часов
+        available_slots = []
+        for slot in all_slots:
+            # Проверяем ограничение 10 часов
+            if not is_slot_available_min_10_hours(slot.date, slot.time, now):
+                continue
+            
+            # Подсчитываем количество записей на этот слот
+            result = await db.execute(
+                select(func.count(Interview.id)).where(
+                    Interview.interview_time_slot_id == slot.id,
+                    Interview.status != InterviewStatus.CANCELLED
+                )
+            )
+            booked_count = result.scalar() or 0
+            available = slot.max_participants - booked_count
+            
+            if available > 0:
+                available_slots.append(slot)
+        
+        if not available_slots:
+            if update_message:
+                await update_message.edit_text("❌ Нет доступных слотов для записи (все слоты заполнены или прошли)")
+            return
+        
+        # Группируем слоты по датам
+        slots_by_date = {}
+        for slot in available_slots:
+            if slot.date not in slots_by_date:
+                slots_by_date[slot.date] = []
+            slots_by_date[slot.date].append(slot)
+        
+        # Формируем клавиатуру с датами
+        keyboard_buttons = []
+        for slot_date in sorted(slots_by_date.keys()):
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"📅 {format_date(slot_date)}",
+                    callback_data=f"inv:date:{slot_date.isoformat()}"
+                )
+            ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        # Получаем администратора для записи в БД
+        result = await db.execute(
+            select(Administrator).where(Administrator.telegram_id == admin_telegram_id)
+        )
+        admin = result.scalars().first()
+        admin_id = admin.id if admin else None
+        
         # Отправляем приглашения
         sent_count = 0
         failed_count = 0
@@ -190,14 +329,27 @@ async def cmd_send_invitations(message: Message, bot: Bot):
         for user in users_to_invite:
             try:
                 # Формируем сообщение
-                text = (
-                    f"🎯 <b>Приглашение на собеседование!</b>\n\n"
-                    f"Факультет: <b>{faculty_name}</b>\n\n"
-                    f"Выберите удобную дату и время для записи на собеседование.\n\n"
-                    f"⚠️ <b>Важно:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
-                    f"❓ В случае технических неполадок обращайтесь к @yanejettt\n\n"
-                    f"Выберите дату:"
-                )
+                if custom_message:
+                    # Используем кастомное сообщение
+                    text = (
+                        f"{custom_message}\n\n"
+                        f"─────────────────\n\n"
+                        f"⚠️ <b>Важно:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+                        f"⚠️ <b>Ограничение:</b> Запись доступна не менее чем за <b>10 часов</b> до начала собеседования.\n\n"
+                        f"❓ В случае технических неполадок обращайтесь к @yanejettt\n\n"
+                        f"Выберите дату:"
+                    )
+                else:
+                    # Стандартное сообщение
+                    text = (
+                        f"🎯 <b>Приглашение на собеседование!</b>\n\n"
+                        f"Факультет: <b>{faculty_name}</b>\n\n"
+                        f"Выберите удобную дату и время для записи на собеседование.\n\n"
+                        f"⚠️ <b>Важно:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+                        f"⚠️ <b>Ограничение:</b> Запись доступна не менее чем за <b>10 часов</b> до начала собеседования.\n\n"
+                        f"❓ В случае технических неполадок обращайтесь к @yanejettt\n\n"
+                        f"Выберите дату:"
+                    )
                 
                 await bot.send_message(
                     chat_id=user.telegram_id,
@@ -221,13 +373,18 @@ async def cmd_send_invitations(message: Message, bot: Bot):
         
         await db.commit()
         
-        await message.answer(
+        result_text = (
             f"✅ <b>Рассылка завершена</b>\n\n"
             f"Отправлено: {sent_count}\n"
             f"Ошибок: {failed_count}\n\n"
-            f"Приглашения отправлены только тем, кому ещё не приходило.",
-            parse_mode="HTML"
+            f"Приглашения отправлены только тем, кому ещё не приходило."
         )
+        
+        if update_message:
+            try:
+                await update_message.edit_text(result_text, parse_mode="HTML")
+            except Exception:
+                await bot.send_message(admin_telegram_id, result_text, parse_mode="HTML")
 
 
 # === Обработка выбора даты ===
