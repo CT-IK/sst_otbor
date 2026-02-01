@@ -499,7 +499,9 @@
                 // Tab button
                 const tab = document.createElement('div');
                 tab.className = `tab ${index === 0 ? 'active' : ''}`;
-                tab.textContent = interviewer.full_name || interviewer.username || `ID ${interviewer.telegram_id}`;
+                const name = interviewer.full_name || interviewer.username || `ID ${interviewer.telegram_id}`;
+                const roleBadge = interviewer.role === 'head_admin' ? '👑 ' : '👤 ';
+                tab.textContent = roleBadge + name;
                 tab.onclick = () => switchTab(interviewer.id);
                 tabsContainer.appendChild(tab);
                 

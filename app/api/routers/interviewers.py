@@ -83,6 +83,7 @@ class InterviewerResponse(BaseModel):
     username: str | None
     full_name: str | None
     faculty_id: int
+    role: str  # head_admin или reviewer
     created_at: str
 
 
@@ -145,12 +146,14 @@ async def add_interviewer(
     )
     existing = result.scalars().first()
     
+    is_new_interviewer = True  # Флаг для отправки уведомления
+    
     if existing:
         if existing.is_active and existing.faculty_id == faculty_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Этот пользователь уже является администратором этого факультета"
-            )
+            # Уже является администратором этого факультета (head_admin или reviewer)
+            # Просто возвращаем его как проводящего
+            interviewer = existing
+            is_new_interviewer = False  # Не отправляем уведомление
         elif existing.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -158,19 +161,21 @@ async def add_interviewer(
             )
         else:
             # Активируем существующего неактивного администратора
+            # Не меняем роль, если он уже head_admin
+            if existing.role != "head_admin":
+                existing.role = "reviewer"
             existing.faculty_id = faculty_id
-            existing.role = "reviewer"
             existing.is_active = True
             existing.added_by = telegram_id
             interviewer = existing
             await db.commit()
             await db.refresh(interviewer)
     else:
-        # Создаём нового администратора
+        # Создаём нового администратора (по умолчанию reviewer)
         interviewer = Administrator(
             telegram_id=data.telegram_id,
             faculty_id=faculty_id,
-            role="reviewer",  # Используем роль reviewer для проводящих
+            role="reviewer",  # По умолчанию reviewer, но может быть и head_admin
             is_active=True,
             added_by=telegram_id
         )
@@ -178,24 +183,25 @@ async def add_interviewer(
         await db.commit()
         await db.refresh(interviewer)
     
-    # Отправляем уведомление в бот
-    try:
-        import httpx
-        bot_token = settings.telegram_bot_token
-        if bot_token:
-            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            async with httpx.AsyncClient() as client:
-                await client.post(url, json={
-                    "chat_id": data.telegram_id,
-                    "text": (
-                        f"👋 <b>Вы добавлены как проводящий собеседования!</b>\n\n"
-                        f"Факультет: <b>{faculty.name}</b>\n\n"
-                        f"Теперь вы можете проводить собеседования для этого факультета."
-                    ),
-                    "parse_mode": "HTML"
-                })
-    except Exception as e:
-        logger.warning(f"Не удалось отправить уведомление проводящему {data.telegram_id}: {e}")
+    # Отправляем уведомление в бот (только если это новый проводящий)
+    if is_new_interviewer:
+        try:
+            import httpx
+            bot_token = settings.telegram_bot_token
+            if bot_token:
+                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                async with httpx.AsyncClient() as client:
+                    await client.post(url, json={
+                        "chat_id": data.telegram_id,
+                        "text": (
+                            f"👋 <b>Вы добавлены как проводящий собеседования!</b>\n\n"
+                            f"Факультет: <b>{faculty.name}</b>\n\n"
+                            f"Теперь вы можете проводить собеседования для этого факультета."
+                        ),
+                        "parse_mode": "HTML"
+                    })
+        except Exception as e:
+            logger.warning(f"Не удалось отправить уведомление проводящему {data.telegram_id}: {e}")
     
     return InterviewerResponse(
         id=interviewer.id,
@@ -203,6 +209,7 @@ async def add_interviewer(
         username=interviewer.username,
         full_name=interviewer.full_name,
         faculty_id=interviewer.faculty_id,
+        role=interviewer.role,
         created_at=interviewer.created_at.isoformat()
     )
 
@@ -225,11 +232,10 @@ async def get_interviewers(
     if not faculty:
         raise HTTPException(status_code=404, detail="Факультет не найден")
     
-    # Получаем всех проводящих (reviewer роли)
+    # Получаем всех проводящих (и head_admin, и reviewer)
     result = await db.execute(
         select(Administrator).where(
             Administrator.faculty_id == faculty_id,
-            Administrator.role == "reviewer",
             Administrator.is_active == True
         ).order_by(Administrator.created_at)
     )
@@ -242,6 +248,7 @@ async def get_interviewers(
             username=i.username,
             full_name=i.full_name,
             faculty_id=i.faculty_id,
+            role=i.role,
             created_at=i.created_at.isoformat()
         )
         for i in interviewers
