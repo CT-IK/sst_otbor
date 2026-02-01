@@ -44,11 +44,14 @@ def upgrade() -> None:
     op.add_column('interview_interviewers', sa.Column('old_interviewer_id', sa.Integer(), nullable=True))
     
     # Копируем данные из administrators в interviewers
+    # Используем DISTINCT ON чтобы избежать дубликатов для одного (telegram_id, faculty_id)
     op.execute("""
         INSERT INTO interviewers (telegram_id, faculty_id, name, username, full_name, is_active, added_by, created_at, updated_at)
-        SELECT telegram_id, faculty_id, name, username, full_name, is_active, NULL, created_at, NOW()
+        SELECT DISTINCT ON (telegram_id, faculty_id)
+            telegram_id, faculty_id, name, username, full_name, is_active, NULL, created_at, NOW()
         FROM administrators
         WHERE is_active = true AND (role = 'reviewer' OR role = 'head_admin')
+        ORDER BY telegram_id, faculty_id, id
     """)
     
     # Обновляем interviewer_schedule: связываем старые interviewer_id с новыми
@@ -57,30 +60,35 @@ def upgrade() -> None:
         SET old_interviewer_id = interviewer_id
     """)
     
-    # Удаляем дубликаты перед обновлением (оставляем только первую запись для каждой комбинации)
+    # Обновляем связи в interviewer_schedule
+    # Используем подзапрос для выбора одного interviewer_id для каждого (telegram_id, faculty_id)
+    op.execute("""
+        UPDATE interviewer_schedule isch
+        SET interviewer_id = (
+            SELECT i.id
+            FROM interviewers i
+            JOIN administrators a ON a.telegram_id = i.telegram_id AND a.faculty_id = i.faculty_id
+            WHERE a.id = isch.old_interviewer_id
+            LIMIT 1
+        )
+        WHERE isch.old_interviewer_id IS NOT NULL
+    """)
+    
+    # Удаляем дубликаты после обновления (оставляем только первую запись для каждой комбинации)
     # Это нужно, чтобы избежать нарушения уникального ограничения uq_interviewer_date_time
     op.execute("""
         DELETE FROM interviewer_schedule isch1
         WHERE isch1.id IN (
             SELECT id FROM (
                 SELECT id, ROW_NUMBER() OVER (
-                    PARTITION BY old_interviewer_id, date, time_slot 
+                    PARTITION BY interviewer_id, date, time_slot 
                     ORDER BY id
                 ) as rn
                 FROM interviewer_schedule
-                WHERE old_interviewer_id IS NOT NULL
+                WHERE interviewer_id IS NOT NULL
             ) t
             WHERE t.rn > 1
         )
-    """)
-    
-    # Обновляем связи в interviewer_schedule
-    op.execute("""
-        UPDATE interviewer_schedule isch
-        SET interviewer_id = i.id
-        FROM interviewers i
-        JOIN administrators a ON a.telegram_id = i.telegram_id AND a.faculty_id = i.faculty_id
-        WHERE isch.old_interviewer_id = a.id
     """)
     
     # Обновляем interview_interviewers аналогично
