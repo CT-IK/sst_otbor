@@ -389,6 +389,7 @@
         <div class="nav-links" id="nav-links" style="display: none;">
             <a href="/admin" class="nav-link active" id="nav-admin">📊 Ответы на анкеты</a>
             <a href="/interviewers" class="nav-link" id="nav-interviewers">👥 Проводящие собесы</a>
+            <a href="/interview-slots" class="nav-link" id="nav-slots">📅 Слоты собеседований</a>
         </div>
         
         <!-- Auth Form (показывается если нет доступа) -->
@@ -578,6 +579,12 @@
             const interviewersLink = document.getElementById('nav-interviewers');
             if (interviewersLink) {
                 interviewersLink.href = `/interviewers?faculty_id=${facultyId}&telegram_id=${telegramId}`;
+            }
+            
+            // Update slots link
+            const slotsLink = document.getElementById('nav-slots');
+            if (slotsLink) {
+                slotsLink.href = `/interview-slots?faculty_id=${facultyId}&telegram_id=${telegramId}`;
             }
         }
         

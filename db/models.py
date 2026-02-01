@@ -449,3 +449,25 @@ class InterviewerSchedule(Base):
         UniqueConstraint('interviewer_id', 'date', 'time_slot', name='uq_interviewer_date_time'),
     )
 
+
+class InterviewTimeSlot(Base):
+    """
+    Слоты собеседований с количеством мест.
+    Хранит для каждой даты и времени количество доступных мест для записи кандидатов.
+    """
+    __tablename__ = "interview_time_slots"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    date: Mapped[date] = mapped_column(Date)  # Дата (2-7 февраля)
+    time: Mapped[Time] = mapped_column(Time)  # Время (10:00-21:00)
+    max_participants: Mapped[int] = mapped_column(Integer, default=0)  # Количество мест (0-10)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    faculty = relationship("Faculty")
+    
+    __table_args__ = (
+        UniqueConstraint('faculty_id', 'date', 'time', name='uq_faculty_date_time'),
+    )
+

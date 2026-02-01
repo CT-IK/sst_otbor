@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление слотами собеседований</title>
+    
+    <style>
+        :root {
+            --bg-color: #0f0f23;
+            --card-bg: #1a1a2e;
+            --text-color: #e4e4e7;
+            --text-muted: #71717a;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --border: #27272a;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+        
+        .header .faculty-name {
+            color: var(--accent);
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            border: none;
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn:hover {
+            background: var(--accent-hover);
+        }
+        
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--accent);
+        }
+        
+        .date-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        
+        .date-header {
+            padding: 1.5rem;
+            background: rgba(99, 102, 241, 0.1);
+            border-bottom: 1px solid var(--border);
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .slots-list {
+            padding: 1.5rem;
+        }
+        
+        .slot-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+        }
+        
+        .slot-item:last-child {
+            border-bottom: none;
+        }
+        
+        .slot-item:hover {
+            background: rgba(99, 102, 241, 0.05);
+        }
+        
+        .slot-time {
+            min-width: 80px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+        
+        .slot-interviewers {
+            flex: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .interviewer-badge {
+            padding: 0.25rem 0.75rem;
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success);
+            border-radius: 9999px;
+            font-size: 0.85rem;
+        }
+        
+        .slot-participants {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .slot-participants label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        
+        .slot-participants select {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        
+        .slot-participants select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+        
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .save-indicator {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            background: var(--success);
+            color: white;
+            border-radius: 8px;
+            font-weight: 500;
+            z-index: 1000;
+        }
+        
+        .save-indicator.show {
+            display: block;
+            animation: fadeInOut 2s;
+        }
+        
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; }
+            10%, 90% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Слоты собеседований — <span class="faculty-name" id="facultyName">...</span></h1>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <a href="/admin" class="btn btn-secondary" style="text-decoration: none;">← Назад</a>
+                <a href="/interviewers" class="btn btn-secondary" style="text-decoration: none;">👥 Проводящие</a>
+            </div>
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            Загрузка...
+        </div>
+        
+        <div id="content" style="display: none;"></div>
+    </div>
+    
+    <div class="save-indicator" id="saveIndicator">💾 Сохранено!</div>
+    
+    <script>
+        const API_BASE = '/api/v1';
+        let facultyId = null;
+        let telegramId = null;
+        let slotsData = {};
+        
+        // Даты: 2-7 февраля 2026
+        const dates = [
+            new Date('2026-02-02'),
+            new Date('2026-02-03'),
+            new Date('2026-02-04'),
+            new Date('2026-02-05'),
+            new Date('2026-02-06'),
+            new Date('2026-02-07')
+        ];
+        
+        // Время: 10:00-21:00
+        const timeSlots = [];
+        for (let h = 10; h <= 21; h++) {
+            timeSlots.push(`${h.toString().padStart(2, '0')}:00`);
+        }
+        
+        // Получаем параметры из URL или localStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        telegramId = urlParams.get('telegram_id') || localStorage.getItem('admin_telegram_id');
+        facultyId = parseInt(urlParams.get('faculty_id') || localStorage.getItem('admin_faculty_id'));
+        
+        if (!facultyId || !telegramId) {
+            document.getElementById('loading').innerHTML = 'Ошибка: не указаны параметры faculty_id и telegram_id';
+        } else {
+            localStorage.setItem('admin_telegram_id', telegramId);
+            localStorage.setItem('admin_faculty_id', facultyId);
+            loadData();
+        }
+        
+        async function loadData() {
+            try {
+                const startDate = '2026-02-02';
+                const endDate = '2026-02-07';
+                const response = await fetch(
+                    `${API_BASE}/interview-slots-management/${facultyId}?start_date=${startDate}&end_date=${endDate}&telegram_id=${telegramId}`
+                );
+                
+                if (!response.ok) throw new Error('Ошибка загрузки');
+                
+                const data = await response.json();
+                document.getElementById('facultyName').textContent = data.faculty_name;
+                
+                // Сохраняем данные
+                slotsData = {};
+                data.dates.forEach(dateData => {
+                    dateData.slots.forEach(slot => {
+                        const key = `${slot.date}_${slot.time}`;
+                        slotsData[key] = slot;
+                    });
+                });
+                
+                renderSlots(data.dates);
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+            } catch (error) {
+                document.getElementById('loading').innerHTML = `Ошибка: ${error.message}`;
+            }
+        }
+        
+        function renderSlots(dates) {
+            const contentDiv = document.getElementById('content');
+            let html = '';
+            
+            dates.forEach(dateData => {
+                const date = new Date(dateData.date);
+                const dayName = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][date.getDay()];
+                
+                html += '<div class="date-section">';
+                html += `<div class="date-header">${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()} (${dayName})</div>`;
+                html += '<div class="slots-list">';
+                
+                dateData.slots.forEach(slot => {
+                    const interviewerNames = slot.available_interviewers.map(i => 
+                        i.name || i.full_name || i.username || `ID ${i.id}`
+                    ).join(', ') || 'Нет проводящих';
+                    
+                    html += '<div class="slot-item">';
+                    html += `<div class="slot-time">${slot.time}</div>`;
+                    html += `<div class="slot-interviewers">`;
+                    if (slot.available_interviewers.length > 0) {
+                        slot.available_interviewers.forEach(interviewer => {
+                            const name = interviewer.name || interviewer.full_name || interviewer.username || `ID ${interviewer.id}`;
+                            html += `<span class="interviewer-badge">${name}</span>`;
+                        });
+                    } else {
+                        html += '<span style="color: var(--text-muted);">Нет проводящих</span>';
+                    }
+                    html += `</div>`;
+                    html += `<div class="slot-participants">`;
+                    html += `<label>Мест:</label>`;
+                    html += `<select onchange="updateSlot('${slot.date}', '${slot.time}', this.value)">`;
+                    for (let i = 0; i <= 10; i++) {
+                        html += `<option value="${i}" ${slot.max_participants === i ? 'selected' : ''}>${i}</option>`;
+                    }
+                    html += `</select>`;
+                    html += `</div>`;
+                    html += '</div>';
+                });
+                
+                html += '</div>';
+                html += '</div>';
+            });
+            
+            contentDiv.innerHTML = html;
+        }
+        
+        async function updateSlot(date, time, maxParticipants) {
+            try {
+                const response = await fetch(
+                    `${API_BASE}/interview-slots-management/${facultyId}/slot?telegram_id=${telegramId}`,
+                    {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            date: date,
+                            time: time,
+                            max_participants: parseInt(maxParticipants)
+                        })
+                    }
+                );
+                
+                if (!response.ok) throw new Error('Ошибка сохранения');
+                
+                // Показываем индикатор сохранения
+                const indicator = document.getElementById('saveIndicator');
+                indicator.classList.add('show');
+                setTimeout(() => {
+                    indicator.classList.remove('show');
+                }, 2000);
+            } catch (error) {
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>
