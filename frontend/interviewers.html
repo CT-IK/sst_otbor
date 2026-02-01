@@ -207,25 +207,35 @@
             align-items: center;
             justify-content: center;
             border-radius: 4px;
+            font-weight: 600;
+            font-size: 1.1rem;
         }
         
         .schedule-cell.available {
-            background: rgba(34, 197, 94, 0.2);
+            background: rgba(34, 197, 94, 0.3);
             color: var(--success);
+            border: 2px solid var(--success);
         }
         
         .schedule-cell.busy {
-            background: rgba(239, 68, 68, 0.2);
+            background: rgba(239, 68, 68, 0.3);
             color: var(--danger);
+            border: 2px solid var(--danger);
         }
         
         .schedule-cell.after-interview {
-            border: 2px solid var(--warning);
+            border: 3px solid var(--warning) !important;
         }
         
         .schedule-cell.empty {
             background: var(--bg-color);
             color: var(--text-muted);
+            border: 1px dashed var(--border);
+        }
+        
+        .schedule-cell.empty:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: var(--accent);
         }
         
         /* Modal */
@@ -352,6 +362,21 @@
             <div class="modal-actions">
                 <button class="btn" onclick="addInterviewer()">Добавить</button>
                 <button class="btn btn-secondary" onclick="hideAddModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal для редактирования имени -->
+    <div class="modal-overlay" id="editNameModal">
+        <div class="modal">
+            <h2>Изменить имя</h2>
+            <div class="form-group">
+                <label>Имя проводящего</label>
+                <input type="text" id="nameInput" placeholder="Введите имя (можно оставить пустым)">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="saveName()">Сохранить</button>
+                <button class="btn btn-secondary" onclick="hideEditNameModal()">Отмена</button>
             </div>
         </div>
     </div>
@@ -499,7 +524,7 @@
                 // Tab button
                 const tab = document.createElement('div');
                 tab.className = `tab ${index === 0 ? 'active' : ''}`;
-                const name = interviewer.full_name || interviewer.username || `ID ${interviewer.telegram_id}`;
+                const name = interviewer.name || interviewer.full_name || interviewer.username || `ID ${interviewer.telegram_id}`;
                 const roleBadge = interviewer.role === 'head_admin' ? '👑 ' : '👤 ';
                 tab.textContent = roleBadge + name;
                 tab.onclick = () => switchTab(interviewer.id);
@@ -571,7 +596,17 @@
         function renderSchedule(interviewerId, scheduleMap) {
             const contentDiv = document.getElementById(`tab-${interviewerId}`);
             
+            // Находим текущего проводящего
+            const currentInterviewer = interviewers.find(i => i.id === interviewerId);
+            const displayName = currentInterviewer ? (currentInterviewer.name || currentInterviewer.full_name || currentInterviewer.username || `ID ${currentInterviewer.telegram_id}`) : '';
+            
             let html = '<div class="schedule-container">';
+            html += '<div style="padding: 1.5rem; border-bottom: 1px solid var(--border);">';
+            html += '<div style="display: flex; justify-content: space-between; align-items: center;">';
+            html += `<h3 style="margin: 0;">${displayName}</h3>`;
+            html += '<button class="btn btn-secondary" onclick="showEditNameModal(' + interviewerId + ')" style="padding: 0.5rem 1rem; font-size: 0.85rem;">✏️ Изменить имя</button>';
+            html += '</div>';
+            html += '</div>';
             html += '<div class="schedule-table-wrapper">';
             html += '<table class="schedule-table">';
             
@@ -599,13 +634,18 @@
                     
                     if (slot) {
                         cellClass = slot.is_available ? 'available' : 'busy';
-                        cellText = slot.is_available ? '✓' : '✗';
+                        cellText = slot.is_available ? '✓ Может' : '✗ Занят';
                         if (slot.is_after_interview) {
                             cellClass += ' after-interview';
                         }
+                    } else {
+                        cellText = 'Клик';
                     }
                     
-                    html += `<td onclick="toggleSlot(${interviewerId}, '${dateStr}', '${timeSlot.time}', ${timeSlot.isAfterInterview})">`;
+                    const tooltip = slot 
+                        ? (slot.is_available ? 'Может проводить собесы' : 'Занят, не может')
+                        : 'Кликните чтобы отметить';
+                    html += `<td onclick="toggleSlot(${interviewerId}, '${dateStr}', '${timeSlot.time}', ${timeSlot.isAfterInterview})" title="${tooltip}">`;
                     html += `<div class="schedule-cell ${cellClass}">${cellText}</div>`;
                     html += '</td>';
                 });
@@ -616,6 +656,14 @@
             html += '</table>';
             html += '</div>';
             html += '<div style="padding: 1.5rem; border-top: 1px solid var(--border);">';
+            html += '<div style="margin-bottom: 1rem; padding: 1rem; background: rgba(99, 102, 241, 0.1); border-radius: 8px; font-size: 0.85rem;">';
+            html += '<strong>Легенда:</strong><br>';
+            html += '<span style="color: var(--success);">✓ Зелёный</span> — может проводить собесы в это время<br>';
+            html += '<span style="color: var(--danger);">✗ Красный</span> — занят, не может<br>';
+            html += '<span style="color: var(--text-muted);">Пусто</span> — не отмечено<br>';
+            html += '<span style="color: var(--warning);">Жёлтая рамка</span> — время после собес (20:00-21:00)<br><br>';
+            html += '<strong>Как использовать:</strong> Кликните на ячейку, чтобы отметить когда проводящий может/не может проводить собесы. Затем нажмите "Сохранить".';
+            html += '</div>';
             html += '<button class="btn save-btn" onclick="saveSchedule(' + interviewerId + ')">💾 Сохранить расписание</button>';
             html += '</div>';
             html += '</div>';
@@ -631,14 +679,14 @@
             
             const current = scheduleData[interviewerId][key];
             if (current) {
-                // Переключаем доступность
+                // Переключаем доступность: свободен ↔ занят
                 current.is_available = !current.is_available;
             } else {
-                // Создаём новый слот (по умолчанию свободен)
+                // Создаём новый слот (по умолчанию "может" = свободен)
                 scheduleData[interviewerId][key] = {
                     date: date,
                     time: time,
-                    is_available: true,
+                    is_available: true,  // true = может проводить собесы
                     is_after_interview: isAfterInterview
                 };
             }
@@ -707,10 +755,58 @@
             }
         }
         
-        // Закрытие модалки по клику вне её
+        let editingInterviewerId = null;
+        
+        function showEditNameModal(interviewerId) {
+            editingInterviewerId = interviewerId;
+            const interviewer = interviewers.find(i => i.id === interviewerId);
+            document.getElementById('nameInput').value = interviewer?.name || '';
+            document.getElementById('editNameModal').classList.add('active');
+        }
+        
+        function hideEditNameModal() {
+            document.getElementById('editNameModal').classList.remove('active');
+            document.getElementById('nameInput').value = '';
+            editingInterviewerId = null;
+        }
+        
+        async function saveName() {
+            if (editingInterviewerId === null) return;
+            
+            const nameValue = document.getElementById('nameInput').value.trim();
+            
+            try {
+                const response = await fetch(
+                    `${API_BASE}/interviewers/${editingInterviewerId}/name?telegram_id=${telegramId}`,
+                    {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: nameValue || null })
+                    }
+                );
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Ошибка сохранения');
+                }
+                
+                hideEditNameModal();
+                loadData(); // Перезагружаем список
+            } catch (error) {
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+        
+        // Закрытие модалок по клику вне их
         document.getElementById('addModal').addEventListener('click', (e) => {
             if (e.target.id === 'addModal') {
                 hideAddModal();
+            }
+        });
+        
+        document.getElementById('editNameModal').addEventListener('click', (e) => {
+            if (e.target.id === 'editNameModal') {
+                hideEditNameModal();
             }
         });
     </script>

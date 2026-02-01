@@ -7,6 +7,7 @@ API для управления проводящими собеседовани�
 - DELETE /interviewers/{interviewer_id} — удалить проводящего (Head Admin)
 - GET /interviewers/{interviewer_id}/schedule — получить расписание (Head Admin)
 - PUT /interviewers/{interviewer_id}/schedule — обновить расписание (Head Admin)
+- PUT /interviewers/{interviewer_id}/name — обновить имя проводящего (Head Admin)
 """
 from datetime import date, time, datetime
 from typing import Annotated, List, Optional
@@ -82,6 +83,7 @@ class InterviewerResponse(BaseModel):
     telegram_id: int | None
     username: str | None
     full_name: str | None
+    name: str | None  # Отображаемое имя
     faculty_id: int
     role: str  # head_admin или reviewer
     created_at: str
@@ -114,6 +116,11 @@ class ScheduleResponse(BaseModel):
     interviewer_name: str
     slots: List[ScheduleSlot]
     total: int
+
+
+class UpdateInterviewerNameRequest(BaseModel):
+    """Обновление имени проводящего"""
+    name: str | None = Field(None, description="Имя проводящего (nullable)")
 
 
 # === Эндпоинты ===
@@ -208,6 +215,7 @@ async def add_interviewer(
         telegram_id=interviewer.telegram_id,
         username=interviewer.username,
         full_name=interviewer.full_name,
+        name=interviewer.name,
         faculty_id=interviewer.faculty_id,
         role=interviewer.role,
         created_at=interviewer.created_at.isoformat()
@@ -247,6 +255,7 @@ async def get_interviewers(
             telegram_id=i.telegram_id,
             username=i.username,
             full_name=i.full_name,
+            name=i.name,
             faculty_id=i.faculty_id,
             role=i.role,
             created_at=i.created_at.isoformat()
@@ -330,7 +339,7 @@ async def get_interviewer_schedule(
         for s in schedules
     ]
     
-    interviewer_name = interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
+    interviewer_name = interviewer.name or interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
     
     return ScheduleResponse(
         interviewer_id=interviewer.id,
@@ -408,11 +417,49 @@ async def update_interviewer_schedule(
     else:
         slots = []
     
-    interviewer_name = interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
+    interviewer_name = interviewer.name or interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
     
     return ScheduleResponse(
         interviewer_id=interviewer.id,
         interviewer_name=interviewer_name,
         slots=slots,
         total=len(slots)
+    )
+
+
+@router.put("/{interviewer_id}/name", response_model=InterviewerResponse)
+async def update_interviewer_name(
+    interviewer_id: int,
+    data: UpdateInterviewerNameRequest,
+    telegram_id: TelegramId,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Обновить имя проводящего.
+    Только для Head Admin.
+    """
+    result = await db.execute(
+        select(Administrator).where(Administrator.id == interviewer_id)
+    )
+    interviewer = result.scalars().first()
+    
+    if not interviewer:
+        raise HTTPException(status_code=404, detail="Проводящий не найден")
+    
+    admin = await verify_head_admin(interviewer.faculty_id, telegram_id, db)
+    
+    # Обновляем имя
+    interviewer.name = data.name if data.name else None
+    await db.commit()
+    await db.refresh(interviewer)
+    
+    return InterviewerResponse(
+        id=interviewer.id,
+        telegram_id=interviewer.telegram_id,
+        username=interviewer.username,
+        full_name=interviewer.full_name,
+        name=interviewer.name,
+        faculty_id=interviewer.faculty_id,
+        role=interviewer.role,
+        created_at=interviewer.created_at.isoformat()
     )

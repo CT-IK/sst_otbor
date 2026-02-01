@@ -82,6 +82,7 @@ class Administrator(Base):
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
     username: Mapped[str | None] = mapped_column(String(50), unique=True, nullable=True)  # @username в Telegram
     full_name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Имя из Telegram
+    name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Отображаемое имя для удобства
     email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)  # Для веб-интерфейса
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Для веб-интерфейса
     faculty_id: Mapped[int | None] = mapped_column(ForeignKey("faculty.id", ondelete="RESTRICT"), nullable=True)
