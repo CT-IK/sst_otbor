@@ -178,6 +178,7 @@ async def cmd_send_invitations(message: Message, bot: Bot):
                     f"Факультет: <b>{faculty_name}</b>\n\n"
                     f"Выберите удобную дату и время для записи на собеседование.\n\n"
                     f"⚠️ <b>Важно:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+                    f"❓ В случае технических неполадок обращайтесь к @yanejettt\n\n"
                     f"Выберите дату:"
                 )
                 
@@ -290,7 +291,7 @@ async def callback_select_date(callback: CallbackQuery, state: FSMContext, bot: 
             time_str = slot.time.strftime("%H:%M")
             keyboard_buttons.append([
                 InlineKeyboardButton(
-                    text=f"🕐 {time_str} (мест: {available})",
+                    text=f"🕐 {time_str}",
                     callback_data=f"inv:time:{slot.id}"
                 )
             ])
@@ -304,7 +305,8 @@ async def callback_select_date(callback: CallbackQuery, state: FSMContext, bot: 
         await callback.message.edit_text(
             f"📅 <b>Выбрана дата: {format_date(selected_date)}</b>\n\n"
             f"Выберите удобное время:\n\n"
-            f"⚠️ <b>Напоминание:</b> Вы можете перезаписаться максимум <b>2 раза</b>.",
+            f"⚠️ <b>Напоминание:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+            f"❓ В случае технических неполадок обращайтесь к @yanejettt",
             reply_markup=keyboard,
             parse_mode="HTML"
         )
@@ -381,6 +383,7 @@ async def callback_select_time(callback: CallbackQuery, state: FSMContext, bot: 
                 f"🕐 Время: {slot.time.strftime('%H:%M')}\n\n"
                 f"Это будет ваша <b>{reschedule_count + 1}-я</b> запись.\n"
                 f"Осталось перезаписей: <b>{remaining}</b>\n\n"
+                f"❓ В случае технических неполадок обращайтесь к @yanejettt\n\n"
                 f"Подтвердите запись:"
             )
         else:
@@ -388,6 +391,8 @@ async def callback_select_time(callback: CallbackQuery, state: FSMContext, bot: 
                 f"📅 <b>Подтверждение записи</b>\n\n"
                 f"Дата: {format_date(slot.date)}\n"
                 f"Время: {slot.time.strftime('%H:%M')}\n\n"
+                f"⚠️ <b>Напоминание:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+                f"❓ В случае технических неполадок обращайтесь к @yanejettt\n\n"
                 f"Подтвердите запись:"
             )
         
@@ -582,7 +587,8 @@ async def callback_back_to_dates(callback: CallbackQuery, state: FSMContext, bot
         await callback.message.edit_text(
             f"🎯 <b>Выберите дату для записи на собеседование</b>\n\n"
             f"Факультет: <b>{faculty_name}</b>\n\n"
-            f"⚠️ <b>Важно:</b> Вы можете перезаписаться максимум <b>2 раза</b>.",
+            f"⚠️ <b>Важно:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+            f"❓ В случае технических неполадок обращайтесь к @yanejettt",
             reply_markup=keyboard,
             parse_mode="HTML"
         )
@@ -667,7 +673,7 @@ async def callback_back_to_time(callback: CallbackQuery, state: FSMContext, bot:
             time_str = slot.time.strftime("%H:%M")
             keyboard_buttons.append([
                 InlineKeyboardButton(
-                    text=f"🕐 {time_str} (мест: {available})",
+                    text=f"🕐 {time_str}",
                     callback_data=f"inv:time:{slot.id}"
                 )
             ])
@@ -681,7 +687,8 @@ async def callback_back_to_time(callback: CallbackQuery, state: FSMContext, bot:
         await callback.message.edit_text(
             f"📅 <b>Выбрана дата: {format_date(selected_date)}</b>\n\n"
             f"Выберите удобное время:\n\n"
-            f"⚠️ <b>Напоминание:</b> Вы можете перезаписаться максимум <b>2 раза</b>.",
+            f"⚠️ <b>Напоминание:</b> Вы можете перезаписаться максимум <b>2 раза</b>.\n\n"
+            f"❓ В случае технических неполадок обращайтесь к @yanejettt",
             reply_markup=keyboard,
             parse_mode="HTML"
         )
