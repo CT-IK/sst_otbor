@@ -17,7 +17,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from config import settings
-from bot.handlers import admin_router, user_router, questions_router, cleanup_router, superadmin_router, reviewers_router, broadcast_router, video_stage_router, surveys_router
+from bot.handlers import admin_router, user_router, questions_router, cleanup_router, superadmin_router, reviewers_router, broadcast_router, video_stage_router, surveys_router, interviews_router
 
 # Логирование
 logging.basicConfig(
@@ -298,6 +298,7 @@ async def main():
     dp.include_router(superadmin_router)  # Супер-админ первый (приоритет)
     dp.include_router(surveys_router)     # Опросы для суперадминов
     dp.include_router(reviewers_router)   # Управление проверяющими
+    dp.include_router(interviews_router)  # Управление собеседованиями
     dp.include_router(broadcast_router)   # Рассылки (только для head_admin)
     dp.include_router(video_stage_router)  # Второй этап - сбор видео
     dp.include_router(admin_router)

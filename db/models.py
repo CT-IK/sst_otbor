@@ -424,3 +424,27 @@ class AdminActionLog(Base):
     faculty = relationship("Faculty")
 
 
+class InterviewerSchedule(Base):
+    """
+    Расписание занятости проводящих собеседования.
+    Хранит доступность/занятость для каждого проводящего по датам и времени.
+    """
+    __tablename__ = "interviewer_schedule"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    interviewer_id: Mapped[int] = mapped_column(ForeignKey("administrators.id", ondelete="CASCADE"))
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"))
+    date: Mapped[date] = mapped_column(Date)  # Дата (2-7 февраля)
+    time_slot: Mapped[Time] = mapped_column(Time)  # Время (10:00-21:00)
+    is_available: Mapped[bool] = mapped_column(Boolean, default=True)  # True = свободен, False = занят
+    is_after_interview: Mapped[bool] = mapped_column(Boolean, default=False)  # True = время после собес (20:00-21:00)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    interviewer = relationship("Administrator", foreign_keys=[interviewer_id])
+    faculty = relationship("Faculty")
+    
+    __table_args__ = (
+        UniqueConstraint('interviewer_id', 'date', 'time_slot', name='uq_interviewer_date_time'),
+    )
+

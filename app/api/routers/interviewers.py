@@ -1,0 +1,401 @@
+"""
+API для управления проводящими собеседования и их расписанием.
+
+Эндпоинты:
+- POST /interviewers/{faculty_id} — добавить проводящего (Head Admin)
+- GET /interviewers/{faculty_id} — список проводящих (Head Admin)
+- DELETE /interviewers/{interviewer_id} — удалить проводящего (Head Admin)
+- GET /interviewers/{interviewer_id}/schedule — получить расписание (Head Admin)
+- PUT /interviewers/{interviewer_id}/schedule — обновить расписание (Head Admin)
+"""
+from datetime import date, time, datetime
+from typing import Annotated, List, Optional
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from sqlalchemy.orm import selectinload
+from pydantic import BaseModel, Field
+
+from config import settings
+from db.session import get_db
+from db.models import (
+    Faculty, Administrator, InterviewerSchedule
+)
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/interviewers")
+
+
+# === Вспомогательные функции ===
+
+def get_telegram_id(
+    telegram_id: int | None = Query(default=None)
+) -> int:
+    """Получить telegram_id из query параметров"""
+    if telegram_id is not None:
+        return telegram_id
+    if settings.is_dev:
+        return settings.dev_telegram_id
+    raise HTTPException(status_code=400, detail="telegram_id обязателен")
+
+
+TelegramId = Annotated[int, Depends(get_telegram_id)]
+
+
+async def verify_head_admin(
+    faculty_id: int,
+    telegram_id: int,
+    db: AsyncSession
+) -> Administrator:
+    """Проверить, что пользователь - Head Admin факультета"""
+    result = await db.execute(
+        select(Administrator).where(
+            Administrator.telegram_id == telegram_id,
+            Administrator.faculty_id == faculty_id,
+            Administrator.role == "head_admin",
+            Administrator.is_active == True
+        )
+    )
+    admin = result.scalars().first()
+    
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Эта функция доступна только главным администраторам факультета"
+        )
+    
+    return admin
+
+
+# === Схемы ===
+
+class AddInterviewerRequest(BaseModel):
+    """Добавление проводящего собесы"""
+    telegram_id: int = Field(description="Telegram ID проводящего")
+
+
+class InterviewerResponse(BaseModel):
+    """Информация о проводящем"""
+    id: int
+    telegram_id: int | None
+    username: str | None
+    full_name: str | None
+    faculty_id: int
+    created_at: str
+
+
+class InterviewersListResponse(BaseModel):
+    """Список проводящих"""
+    faculty_id: int
+    faculty_name: str
+    interviewers: List[InterviewerResponse]
+    total: int
+
+
+class ScheduleSlot(BaseModel):
+    """Один слот расписания"""
+    date: date
+    time: str  # HH:MM
+    is_available: bool
+    is_after_interview: bool
+
+
+class ScheduleUpdateRequest(BaseModel):
+    """Обновление расписания"""
+    slots: List[ScheduleSlot]
+
+
+class ScheduleResponse(BaseModel):
+    """Расписание проводящего"""
+    interviewer_id: int
+    interviewer_name: str
+    slots: List[ScheduleSlot]
+    total: int
+
+
+# === Эндпоинты ===
+
+@router.post("/{faculty_id}", response_model=InterviewerResponse, status_code=status.HTTP_201_CREATED)
+async def add_interviewer(
+    faculty_id: int,
+    data: AddInterviewerRequest,
+    telegram_id: TelegramId,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Добавить проводящего собесы.
+    Только для Head Admin.
+    Отправляет уведомление в бот.
+    """
+    admin = await verify_head_admin(faculty_id, telegram_id, db)
+    
+    # Проверяем факультет
+    result = await db.execute(select(Faculty).where(Faculty.id == faculty_id))
+    faculty = result.scalars().first()
+    if not faculty:
+        raise HTTPException(status_code=404, detail="Факультет не найден")
+    
+    # Проверяем, не добавлен ли уже
+    result = await db.execute(
+        select(Administrator).where(
+            Administrator.telegram_id == data.telegram_id,
+            Administrator.faculty_id == faculty_id,
+            Administrator.is_active == True
+        )
+    )
+    existing = result.scalars().first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Этот пользователь уже является администратором этого факультета"
+        )
+    
+    # Получаем информацию о пользователе из Telegram (если возможно)
+    # В реальности нужно использовать Telegram Bot API
+    # Пока создаём с минимальной информацией
+    
+    interviewer = Administrator(
+        telegram_id=data.telegram_id,
+        faculty_id=faculty_id,
+        role="reviewer",  # Используем роль reviewer для проводящих
+        is_active=True,
+        added_by=telegram_id
+    )
+    db.add(interviewer)
+    await db.commit()
+    await db.refresh(interviewer)
+    
+    # Отправляем уведомление в бот
+    try:
+        import httpx
+        bot_token = settings.telegram_bot_token
+        if bot_token:
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            async with httpx.AsyncClient() as client:
+                await client.post(url, json={
+                    "chat_id": data.telegram_id,
+                    "text": (
+                        f"👋 <b>Вы добавлены как проводящий собеседования!</b>\n\n"
+                        f"Факультет: <b>{faculty.name}</b>\n\n"
+                        f"Теперь вы можете проводить собеседования для этого факультета."
+                    ),
+                    "parse_mode": "HTML"
+                })
+    except Exception as e:
+        logger.warning(f"Не удалось отправить уведомление проводящему {data.telegram_id}: {e}")
+    
+    return InterviewerResponse(
+        id=interviewer.id,
+        telegram_id=interviewer.telegram_id,
+        username=interviewer.username,
+        full_name=interviewer.full_name,
+        faculty_id=interviewer.faculty_id,
+        created_at=interviewer.created_at.isoformat()
+    )
+
+
+@router.get("/{faculty_id}", response_model=InterviewersListResponse)
+async def get_interviewers(
+    faculty_id: int,
+    telegram_id: TelegramId,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Получить список всех проводящих собесы факультета.
+    Только для Head Admin.
+    """
+    admin = await verify_head_admin(faculty_id, telegram_id, db)
+    
+    # Проверяем факультет
+    result = await db.execute(select(Faculty).where(Faculty.id == faculty_id))
+    faculty = result.scalars().first()
+    if not faculty:
+        raise HTTPException(status_code=404, detail="Факультет не найден")
+    
+    # Получаем всех проводящих (reviewer роли)
+    result = await db.execute(
+        select(Administrator).where(
+            Administrator.faculty_id == faculty_id,
+            Administrator.role == "reviewer",
+            Administrator.is_active == True
+        ).order_by(Administrator.created_at)
+    )
+    interviewers = result.scalars().all()
+    
+    interviewer_responses = [
+        InterviewerResponse(
+            id=i.id,
+            telegram_id=i.telegram_id,
+            username=i.username,
+            full_name=i.full_name,
+            faculty_id=i.faculty_id,
+            created_at=i.created_at.isoformat()
+        )
+        for i in interviewers
+    ]
+    
+    return InterviewersListResponse(
+        faculty_id=faculty.id,
+        faculty_name=faculty.name,
+        interviewers=interviewer_responses,
+        total=len(interviewer_responses)
+    )
+
+
+@router.delete("/{interviewer_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_interviewer(
+    interviewer_id: int,
+    telegram_id: TelegramId,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Удалить проводящего.
+    Только для Head Admin.
+    """
+    result = await db.execute(
+        select(Administrator).where(Administrator.id == interviewer_id)
+    )
+    interviewer = result.scalars().first()
+    
+    if not interviewer:
+        raise HTTPException(status_code=404, detail="Проводящий не найден")
+    
+    admin = await verify_head_admin(interviewer.faculty_id, telegram_id, db)
+    
+    # Деактивируем вместо удаления
+    interviewer.is_active = False
+    await db.commit()
+
+
+@router.get("/{interviewer_id}/schedule", response_model=ScheduleResponse)
+async def get_interviewer_schedule(
+    interviewer_id: int,
+    start_date: date = Query(description="Начальная дата (например, 2026-02-02)"),
+    end_date: date = Query(description="Конечная дата (например, 2026-02-07)"),
+    telegram_id: TelegramId = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Получить расписание проводящего.
+    Доступно для Head Admin.
+    """
+    result = await db.execute(
+        select(Administrator).where(Administrator.id == interviewer_id)
+    )
+    interviewer = result.scalars().first()
+    
+    if not interviewer:
+        raise HTTPException(status_code=404, detail="Проводящий не найден")
+    
+    if telegram_id:
+        admin = await verify_head_admin(interviewer.faculty_id, telegram_id, db)
+    
+    # Получаем расписание
+    result = await db.execute(
+        select(InterviewerSchedule).where(
+            InterviewerSchedule.interviewer_id == interviewer_id,
+            InterviewerSchedule.date >= start_date,
+            InterviewerSchedule.date <= end_date
+        ).order_by(InterviewerSchedule.date, InterviewerSchedule.time_slot)
+    )
+    schedules = result.scalars().all()
+    
+    slots = [
+        ScheduleSlot(
+            date=s.date,
+            time=s.time_slot.strftime("%H:%M"),
+            is_available=s.is_available,
+            is_after_interview=s.is_after_interview
+        )
+        for s in schedules
+    ]
+    
+    interviewer_name = interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
+    
+    return ScheduleResponse(
+        interviewer_id=interviewer.id,
+        interviewer_name=interviewer_name,
+        slots=slots,
+        total=len(slots)
+    )
+
+
+@router.put("/{interviewer_id}/schedule", response_model=ScheduleResponse)
+async def update_interviewer_schedule(
+    interviewer_id: int,
+    data: ScheduleUpdateRequest,
+    telegram_id: TelegramId,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Обновить расписание проводящего.
+    Только для Head Admin.
+    """
+    result = await db.execute(
+        select(Administrator).where(Administrator.id == interviewer_id)
+    )
+    interviewer = result.scalars().first()
+    
+    if not interviewer:
+        raise HTTPException(status_code=404, detail="Проводящий не найден")
+    
+    admin = await verify_head_admin(interviewer.faculty_id, telegram_id, db)
+    
+    # Удаляем старое расписание для этих дат
+    if data.slots:
+        dates = {slot.date for slot in data.slots}
+        await db.execute(
+            delete(InterviewerSchedule).where(
+                InterviewerSchedule.interviewer_id == interviewer_id,
+                InterviewerSchedule.date.in_(dates)
+            )
+        )
+    
+    # Создаём новое расписание
+    for slot in data.slots:
+        schedule = InterviewerSchedule(
+            interviewer_id=interviewer_id,
+            faculty_id=interviewer.faculty_id,
+            date=slot.date,
+            time_slot=datetime.strptime(slot.time, "%H:%M").time(),
+            is_available=slot.is_available,
+            is_after_interview=slot.is_after_interview
+        )
+        db.add(schedule)
+    
+    await db.commit()
+    
+    # Возвращаем обновлённое расписание
+    if data.slots:
+        dates = {slot.date for slot in data.slots}
+        result = await db.execute(
+            select(InterviewerSchedule).where(
+                InterviewerSchedule.interviewer_id == interviewer_id,
+                InterviewerSchedule.date.in_(dates)
+            ).order_by(InterviewerSchedule.date, InterviewerSchedule.time_slot)
+        )
+        schedules = result.scalars().all()
+        
+        slots = [
+            ScheduleSlot(
+                date=s.date,
+                time=s.time_slot.strftime("%H:%M"),
+                is_available=s.is_available,
+                is_after_interview=s.is_after_interview
+            )
+            for s in schedules
+        ]
+    else:
+        slots = []
+    
+    interviewer_name = interviewer.full_name or interviewer.username or f"ID {interviewer.telegram_id}"
+    
+    return ScheduleResponse(
+        interviewer_id=interviewer.id,
+        interviewer_name=interviewer_name,
+        slots=slots,
+        total=len(slots)
+    )

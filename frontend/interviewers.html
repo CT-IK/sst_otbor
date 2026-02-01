@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление проводящими собесы</title>
+    
+    <style>
+        :root {
+            --bg-color: #0f0f23;
+            --card-bg: #1a1a2e;
+            --text-color: #e4e4e7;
+            --text-muted: #71717a;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --border: #27272a;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+        
+        .header .faculty-name {
+            color: var(--accent);
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            border: none;
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn:hover {
+            background: var(--accent-hover);
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--accent);
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+        }
+        
+        .tab {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-bottom: none;
+            color: var(--text-muted);
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        
+        .tab:hover {
+            color: var(--text-color);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .tab.active {
+            background: var(--card-bg);
+            color: var(--accent);
+            border-color: var(--accent);
+            border-bottom-color: var(--card-bg);
+            position: relative;
+            z-index: 1;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Schedule Table */
+        .schedule-container {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        
+        .schedule-table-wrapper {
+            overflow-x: auto;
+        }
+        
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        .schedule-table th {
+            background: rgba(99, 102, 241, 0.1);
+            padding: 0.75rem;
+            text-align: center;
+            border: 1px solid var(--border);
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+        
+        .schedule-table th:first-child {
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background: rgba(99, 102, 241, 0.15);
+            z-index: 2;
+        }
+        
+        .schedule-table td {
+            padding: 0.5rem;
+            text-align: center;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 60px;
+        }
+        
+        .schedule-table td:first-child {
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background: var(--card-bg);
+            z-index: 1;
+            font-weight: 500;
+            padding-left: 1rem;
+        }
+        
+        .schedule-table td:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .schedule-cell {
+            width: 100%;
+            height: 100%;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+        
+        .schedule-cell.available {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success);
+        }
+        
+        .schedule-cell.busy {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+        
+        .schedule-cell.after-interview {
+            border: 2px solid var(--warning);
+        }
+        
+        .schedule-cell.empty {
+            background: var(--bg-color);
+            color: var(--text-muted);
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: var(--card-bg);
+            border-radius: 12px;
+            max-width: 400px;
+            width: 90%;
+            padding: 2rem;
+            border: 1px solid var(--border);
+        }
+        
+        .modal h2 {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-size: 1rem;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+        
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .save-btn {
+            margin-top: 1.5rem;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Управление проводящими собесы — <span class="faculty-name" id="facultyName">...</span></h1>
+            <button class="btn" onclick="showAddModal()">➕ Добавить проводящего</button>
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            Загрузка...
+        </div>
+        
+        <div id="content" style="display: none;">
+            <div class="tabs" id="tabs"></div>
+            
+            <div id="tabContents"></div>
+        </div>
+    </div>
+    
+    <!-- Modal для добавления проводящего -->
+    <div class="modal-overlay" id="addModal">
+        <div class="modal">
+            <h2>Добавить проводящего</h2>
+            <div class="form-group">
+                <label>Telegram ID</label>
+                <input type="number" id="telegramIdInput" placeholder="123456789">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="addInterviewer()">Добавить</button>
+                <button class="btn btn-secondary" onclick="hideAddModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '/api/v1';
+        let facultyId = null;
+        let interviewers = [];
+        let currentInterviewerId = null;
+        let scheduleData = {};
+        
+        // Даты: 2-7 февраля 2026
+        const dates = [
+            new Date('2026-02-02'),
+            new Date('2026-02-03'),
+            new Date('2026-02-04'),
+            new Date('2026-02-05'),
+            new Date('2026-02-06'),
+            new Date('2026-02-07')
+        ];
+        
+        // Время: 10:00-21:00 (обычное), 20:00-21:00 (после собес)
+        const timeSlots = [];
+        for (let h = 10; h <= 21; h++) {
+            timeSlots.push({
+                hour: h,
+                time: `${h.toString().padStart(2, '0')}:00`,
+                isAfterInterview: h >= 20
+            });
+        }
+        
+        // Получаем параметры из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        facultyId = parseInt(urlParams.get('faculty_id'));
+        const telegramId = urlParams.get('telegram_id');
+        
+        if (!facultyId || !telegramId) {
+            document.getElementById('loading').innerHTML = 'Ошибка: не указаны параметры faculty_id и telegram_id';
+        } else {
+            loadData();
+        }
+        
+        async function loadData() {
+            try {
+                const response = await fetch(`${API_BASE}/interviewers/${facultyId}?telegram_id=${telegramId}`);
+                if (!response.ok) throw new Error('Ошибка загрузки');
+                
+                const data = await response.json();
+                interviewers = data.interviewers;
+                document.getElementById('facultyName').textContent = data.faculty_name;
+                
+                if (interviewers.length === 0) {
+                    document.getElementById('content').innerHTML = '<p style="text-align: center; padding: 3rem; color: var(--text-muted);">Нет проводящих. Добавьте первого проводящего.</p>';
+                    document.getElementById('content').style.display = 'block';
+                    document.getElementById('loading').style.display = 'none';
+                    return;
+                }
+                
+                renderTabs();
+                if (interviewers.length > 0) {
+                    currentInterviewerId = interviewers[0].id;
+                    loadSchedule(interviewers[0].id);
+                }
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+            } catch (error) {
+                document.getElementById('loading').innerHTML = `Ошибка: ${error.message}`;
+            }
+        }
+        
+        function renderTabs() {
+            const tabsContainer = document.getElementById('tabs');
+            const contentsContainer = document.getElementById('tabContents');
+            
+            tabsContainer.innerHTML = '';
+            contentsContainer.innerHTML = '';
+            
+            interviewers.forEach((interviewer, index) => {
+                // Tab button
+                const tab = document.createElement('div');
+                tab.className = `tab ${index === 0 ? 'active' : ''}`;
+                tab.textContent = interviewer.full_name || interviewer.username || `ID ${interviewer.telegram_id}`;
+                tab.onclick = () => switchTab(interviewer.id);
+                tabsContainer.appendChild(tab);
+                
+                // Tab content
+                const content = document.createElement('div');
+                content.className = `tab-content ${index === 0 ? 'active' : ''}`;
+                content.id = `tab-${interviewer.id}`;
+                content.innerHTML = '<div class="loading"><div class="spinner"></div> Загрузка расписания...</div>';
+                contentsContainer.appendChild(content);
+            });
+        }
+        
+        function switchTab(interviewerId) {
+            currentInterviewerId = interviewerId;
+            
+            // Update tabs
+            document.querySelectorAll('.tab').forEach((tab, index) => {
+                if (interviewers[index].id === interviewerId) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+            
+            // Update contents
+            document.querySelectorAll('.tab-content').forEach((content) => {
+                if (content.id === `tab-${interviewerId}`) {
+                    content.classList.add('active');
+                } else {
+                    content.classList.remove('active');
+                }
+            });
+            
+            loadSchedule(interviewerId);
+        }
+        
+        async function loadSchedule(interviewerId) {
+            const contentDiv = document.getElementById(`tab-${interviewerId}`);
+            contentDiv.innerHTML = '<div class="loading"><div class="spinner"></div> Загрузка расписания...</div>';
+            
+            try {
+                const startDate = '2026-02-02';
+                const endDate = '2026-02-07';
+                const response = await fetch(
+                    `${API_BASE}/interviewers/${interviewerId}/schedule?start_date=${startDate}&end_date=${endDate}&telegram_id=${telegramId}`
+                );
+                
+                if (!response.ok) throw new Error('Ошибка загрузки расписания');
+                
+                const data = await response.json();
+                
+                // Создаём карту расписания
+                const scheduleMap = {};
+                data.slots.forEach(slot => {
+                    const key = `${slot.date}_${slot.time}`;
+                    scheduleMap[key] = slot;
+                });
+                
+                scheduleData[interviewerId] = scheduleMap;
+                
+                renderSchedule(interviewerId, scheduleMap);
+            } catch (error) {
+                contentDiv.innerHTML = `<div class="error">Ошибка: ${error.message}</div>`;
+            }
+        }
+        
+        function renderSchedule(interviewerId, scheduleMap) {
+            const contentDiv = document.getElementById(`tab-${interviewerId}`);
+            
+            let html = '<div class="schedule-container">';
+            html += '<div class="schedule-table-wrapper">';
+            html += '<table class="schedule-table">';
+            
+            // Header: даты
+            html += '<thead><tr><th>Время</th>';
+            dates.forEach(date => {
+                const dayName = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][date.getDay()];
+                html += `<th>${date.getDate()}.${date.getMonth() + 1}<br>${dayName}</th>`;
+            });
+            html += '</tr></thead>';
+            
+            // Body: время и ячейки
+            html += '<tbody>';
+            timeSlots.forEach(timeSlot => {
+                html += '<tr>';
+                html += `<td>${timeSlot.time}</td>`;
+                
+                dates.forEach(date => {
+                    const dateStr = date.toISOString().split('T')[0];
+                    const key = `${dateStr}_${timeSlot.time}`;
+                    const slot = scheduleMap[key];
+                    
+                    let cellClass = 'empty';
+                    let cellText = '';
+                    
+                    if (slot) {
+                        cellClass = slot.is_available ? 'available' : 'busy';
+                        cellText = slot.is_available ? '✓' : '✗';
+                        if (slot.is_after_interview) {
+                            cellClass += ' after-interview';
+                        }
+                    }
+                    
+                    html += `<td onclick="toggleSlot(${interviewerId}, '${dateStr}', '${timeSlot.time}', ${timeSlot.isAfterInterview})">`;
+                    html += `<div class="schedule-cell ${cellClass}">${cellText}</div>`;
+                    html += '</td>';
+                });
+                
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            html += '</table>';
+            html += '</div>';
+            html += '<div style="padding: 1.5rem; border-top: 1px solid var(--border);">';
+            html += '<button class="btn save-btn" onclick="saveSchedule(' + interviewerId + ')">💾 Сохранить расписание</button>';
+            html += '</div>';
+            html += '</div>';
+            
+            contentDiv.innerHTML = html;
+        }
+        
+        function toggleSlot(interviewerId, date, time, isAfterInterview) {
+            const key = `${date}_${time}`;
+            if (!scheduleData[interviewerId]) {
+                scheduleData[interviewerId] = {};
+            }
+            
+            const current = scheduleData[interviewerId][key];
+            if (current) {
+                // Переключаем доступность
+                current.is_available = !current.is_available;
+            } else {
+                // Создаём новый слот (по умолчанию свободен)
+                scheduleData[interviewerId][key] = {
+                    date: date,
+                    time: time,
+                    is_available: true,
+                    is_after_interview: isAfterInterview
+                };
+            }
+            
+            renderSchedule(interviewerId, scheduleData[interviewerId]);
+        }
+        
+        async function saveSchedule(interviewerId) {
+            const scheduleMap = scheduleData[interviewerId] || {};
+            const slots = Object.values(scheduleMap);
+            
+            try {
+                const response = await fetch(
+                    `${API_BASE}/interviewers/${interviewerId}/schedule?telegram_id=${telegramId}`,
+                    {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ slots })
+                    }
+                );
+                
+                if (!response.ok) throw new Error('Ошибка сохранения');
+                
+                alert('Расписание сохранено!');
+                loadSchedule(interviewerId); // Перезагружаем для синхронизации
+            } catch (error) {
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+        
+        function showAddModal() {
+            document.getElementById('addModal').classList.add('active');
+        }
+        
+        function hideAddModal() {
+            document.getElementById('addModal').classList.remove('active');
+            document.getElementById('telegramIdInput').value = '';
+        }
+        
+        async function addInterviewer() {
+            const telegramIdValue = document.getElementById('telegramIdInput').value;
+            if (!telegramIdValue) {
+                alert('Введите Telegram ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch(
+                    `${API_BASE}/interviewers/${facultyId}?telegram_id=${telegramId}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ telegram_id: parseInt(telegramIdValue) })
+                    }
+                );
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Ошибка добавления');
+                }
+                
+                hideAddModal();
+                loadData(); // Перезагружаем список
+            } catch (error) {
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+        
+        // Закрытие модалки по клику вне её
+        document.getElementById('addModal').addEventListener('click', (e) => {
+            if (e.target.id === 'addModal') {
+                hideAddModal();
+            }
+        });
+    </script>
+</body>
+</html>
