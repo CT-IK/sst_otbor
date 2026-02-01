@@ -1,10 +1,11 @@
 """
 Система опросов для суперадминов.
 Рассылка опросов всем пользователям бота с сохранением ответов в JSON.
+Статистика по факультетам.
 """
 import json
 import logging
-import os
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -15,10 +16,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from config import settings
 from db.engine import async_session_maker
-from db.models import User
+from db.models import User, UserProgress, Questionnaire, Faculty
 
 logger = logging.getLogger(__name__)
 surveys_router = Router()
@@ -79,9 +81,62 @@ def save_survey(survey_id: str, survey_data: dict):
     save_surveys(surveys)
 
 
-def add_response(survey_id: str, telegram_id: int, username: Optional[str], answer: str) -> bool:
+async def get_user_faculty(telegram_id: int) -> tuple[Optional[int], Optional[str]]:
     """
-    Добавить ответ в опрос.
+    Получить факультет пользователя.
+    Возвращает (faculty_id, faculty_name) или (None, None)
+    """
+    async with async_session_maker() as db:
+        # Сначала ищем в user_progress (самый актуальный источник)
+        result = await db.execute(
+            select(UserProgress)
+            .options(selectinload(UserProgress.faculty))
+            .join(User, UserProgress.user_id == User.id)
+            .where(User.telegram_id == telegram_id)
+            .order_by(UserProgress.id.desc())
+            .limit(1)
+        )
+        progress = result.scalars().first()
+        
+        if progress and progress.faculty:
+            return progress.faculty_id, progress.faculty.name
+        
+        # Ищем в questionnaires
+        result = await db.execute(
+            select(Questionnaire)
+            .options(selectinload(Questionnaire.faculty))
+            .join(User, Questionnaire.user_id == User.id)
+            .where(User.telegram_id == telegram_id)
+            .order_by(Questionnaire.submitted_at.desc())
+            .limit(1)
+        )
+        questionnaire = result.scalars().first()
+        
+        if questionnaire and questionnaire.faculty:
+            return questionnaire.faculty_id, questionnaire.faculty.name
+        
+        # Ищем в user.faculty_id
+        result = await db.execute(
+            select(User)
+            .options(selectinload(User.faculty))
+            .where(User.telegram_id == telegram_id)
+        )
+        user = result.scalars().first()
+        
+        if user and user.faculty:
+            return user.faculty_id, user.faculty.name
+    
+    return None, None
+
+
+async def add_response(
+    survey_id: str, 
+    telegram_id: int, 
+    username: Optional[str], 
+    answer: str
+) -> bool:
+    """
+    Добавить ответ в опрос с информацией о факультете.
     Возвращает True если ответ новый, False если уже отвечал.
     """
     surveys = load_surveys()
@@ -95,6 +150,9 @@ def add_response(survey_id: str, telegram_id: int, username: Optional[str], answ
         if response.get("telegram_id") == telegram_id:
             return False  # Уже отвечал
     
+    # Получаем факультет пользователя
+    faculty_id, faculty_name = await get_user_faculty(telegram_id)
+    
     # Добавляем ответ
     if "responses" not in survey:
         survey["responses"] = []
@@ -103,6 +161,8 @@ def add_response(survey_id: str, telegram_id: int, username: Optional[str], answ
         "telegram_id": telegram_id,
         "username": username,
         "answer": answer,
+        "faculty_id": faculty_id,
+        "faculty_name": faculty_name or "Без факультета",
         "answered_at": datetime.now().isoformat()
     })
     
@@ -341,8 +401,8 @@ async def handle_survey_response(callback: CallbackQuery):
     
     answer = options[option_idx]
     
-    # Сохраняем ответ
-    is_new = add_response(
+    # Сохраняем ответ (теперь асинхронно с определением факультета)
+    is_new = await add_response(
         survey_id=survey_id,
         telegram_id=callback.from_user.id,
         username=callback.from_user.username,
@@ -413,20 +473,19 @@ async def cmd_survey_results(message: Message):
     options = survey.get("options", [])
     responses = survey.get("responses", [])
     
-    # Подсчёт по вариантам
+    # === ОБЩАЯ СТАТИСТИКА ===
+    total = len(responses)
     stats = {opt: 0 for opt in options}
     for response in responses:
         answer = response.get("answer")
         if answer in stats:
             stats[answer] += 1
     
-    total = len(responses)
-    
-    # Формируем текст
+    # Формируем текст общей статистики
     text = f"📊 <b>Результаты опроса</b>\n\n"
     text += f"📝 {survey.get('message')}\n\n"
     text += f"👥 <b>Всего ответов:</b> {total}\n\n"
-    text += "<b>Распределение:</b>\n"
+    text += "<b>📈 Общая статистика:</b>\n"
     
     for option in options:
         count = stats[option]
@@ -435,15 +494,47 @@ async def cmd_survey_results(message: Message):
         text += f"  {bar} {count} ({percent:.1f}%)\n"
         text += f"  <i>{option}</i>\n\n"
     
-    # Последние 10 ответов
-    if responses:
-        text += "\n<b>Последние ответы:</b>\n"
-        for response in responses[-10:]:
-            username = response.get("username") or str(response.get("telegram_id"))
-            answer = response.get("answer")
-            text += f"  • @{username}: {answer}\n"
+    # === СТАТИСТИКА ПО ФАКУЛЬТЕТАМ ===
+    faculty_stats = defaultdict(lambda: {"total": 0, "answers": defaultdict(int)})
     
-    await message.answer(text)
+    for response in responses:
+        faculty_name = response.get("faculty_name", "Без факультета")
+        answer = response.get("answer")
+        faculty_stats[faculty_name]["total"] += 1
+        if answer:
+            faculty_stats[faculty_name]["answers"][answer] += 1
+    
+    if faculty_stats:
+        text += "\n<b>🏛 Статистика по факультетам:</b>\n"
+        text += "─" * 25 + "\n\n"
+        
+        # Сортируем факультеты по количеству ответов
+        sorted_faculties = sorted(
+            faculty_stats.items(), 
+            key=lambda x: x[1]["total"], 
+            reverse=True
+        )
+        
+        for faculty_name, data in sorted_faculties:
+            faculty_total = data["total"]
+            text += f"<b>🏛 {faculty_name}</b> ({faculty_total} чел.)\n"
+            
+            for option in options:
+                count = data["answers"].get(option, 0)
+                percent = (count / faculty_total * 100) if faculty_total > 0 else 0
+                # Короткая полоска для компактности
+                bar = "▓" * int(percent / 20) + "░" * (5 - int(percent / 20))
+                text += f"  {bar} {count} ({percent:.0f}%) — {option}\n"
+            text += "\n"
+    
+    # Проверяем длину сообщения (Telegram лимит 4096)
+    if len(text) > 4000:
+        # Отправляем в двух сообщениях
+        split_point = text.rfind("\n\n", 0, 4000)
+        await message.answer(text[:split_point])
+        await message.answer(text[split_point:])
+    else:
+        await message.answer(text)
 
 
 # === Список опросов ===

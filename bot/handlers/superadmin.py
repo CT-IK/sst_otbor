@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from config import settings
 from db.engine import async_session_maker
-from db.models import Faculty, Administrator, StageType, StageStatus
+from db.models import Faculty, Administrator, StageType, StageStatus, HomeVideo, User
 
 logger = logging.getLogger(__name__)
 superadmin_router = Router()
@@ -30,6 +30,12 @@ class AddAdminStates(StatesGroup):
     """Состояния для добавления админа"""
     select_faculty = State()
     enter_telegram_id = State()
+    confirm = State()
+
+
+class ResendVideosStates(StatesGroup):
+    """Состояния для переотправки видео"""
+    select_faculty = State()
     confirm = State()
 
 
@@ -698,6 +704,195 @@ async def confirm_remove_admin(callback: CallbackQuery):
     
     await callback.message.edit_text("✅ Администратор удалён")
     await callback.answer("Удалено!")
+
+
+# === Переотправка видео в чат факультета ===
+
+@superadmin_router.message(Command("resend_videos"))
+async def cmd_resend_videos(message: Message, state: FSMContext):
+    """Переотправить все видео факультета в его чат"""
+    if not is_super_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет прав супер-администратора")
+        return
+    
+    async with async_session_maker() as db:
+        result = await db.execute(select(Faculty))
+        faculties = result.scalars().all()
+    
+    if not faculties:
+        await message.answer("❌ Факультетов нет")
+        return
+    
+    buttons = []
+    for f in faculties:
+        chat_status = "✅" if f.video_chat_id else "❌"
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{chat_status} {f.name}",
+                callback_data=f"rsv:select:{f.id}"
+            )
+        ])
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="rsv:cancel")])
+    
+    await state.set_state(ResendVideosStates.select_faculty)
+    
+    await message.answer(
+        "📹 <b>Переотправка видео в чат факультета</b>\n\n"
+        "Выберите факультет:\n"
+        "<i>✅ — чат настроен, ❌ — чат не настроен</i>",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+    )
+
+
+@superadmin_router.callback_query(F.data.startswith("rsv:select:"), ResendVideosStates.select_faculty)
+async def callback_resend_select_faculty(callback: CallbackQuery, state: FSMContext):
+    """Выбор факультета для переотправки видео"""
+    if not is_super_admin(callback.from_user.id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    
+    faculty_id = int(callback.data.split(":")[2])
+    
+    async with async_session_maker() as db:
+        # Получаем факультет
+        result = await db.execute(select(Faculty).where(Faculty.id == faculty_id))
+        faculty = result.scalars().first()
+        
+        if not faculty:
+            await callback.answer("Факультет не найден", show_alert=True)
+            return
+        
+        if not faculty.video_chat_id:
+            await callback.answer(
+                "❌ У этого факультета не настроен чат для видео!\n"
+                "Используйте /video_chat чтобы настроить.",
+                show_alert=True
+            )
+            return
+        
+        # Получаем все видео этого факультета
+        result = await db.execute(
+            select(HomeVideo, User)
+            .join(User, HomeVideo.user_id == User.id)
+            .where(HomeVideo.faculty_id == faculty_id)
+            .order_by(HomeVideo.submitted_at.desc())
+        )
+        videos = result.all()
+        
+        faculty_name = faculty.name
+        video_chat_id = faculty.video_chat_id
+    
+    if not videos:
+        await callback.message.edit_text(
+            f"❌ У факультета «{faculty_name}» нет загруженных видео."
+        )
+        await state.clear()
+        await callback.answer()
+        return
+    
+    await state.update_data(
+        faculty_id=faculty_id,
+        faculty_name=faculty_name,
+        video_chat_id=video_chat_id,
+        video_count=len(videos)
+    )
+    await state.set_state(ResendVideosStates.confirm)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Отправить все", callback_data="rsv:confirm"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="rsv:cancel")
+        ]
+    ])
+    
+    await callback.message.edit_text(
+        f"📹 <b>Переотправка видео</b>\n\n"
+        f"Факультет: <b>{faculty_name}</b>\n"
+        f"Чат ID: <code>{video_chat_id}</code>\n"
+        f"Видео: <b>{len(videos)}</b> шт.\n\n"
+        f"Будут отправлены ссылки на все видео в чат факультета.\n\n"
+        f"Продолжить?",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@superadmin_router.callback_query(F.data == "rsv:confirm", ResendVideosStates.confirm)
+async def callback_resend_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    """Подтверждение и отправка видео"""
+    if not is_super_admin(callback.from_user.id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    
+    data = await state.get_data()
+    faculty_id = data["faculty_id"]
+    faculty_name = data["faculty_name"]
+    video_chat_id = data["video_chat_id"]
+    
+    await callback.message.edit_text(
+        f"⏳ <b>Отправка видео в чат факультета «{faculty_name}»...</b>"
+    )
+    
+    # Получаем все видео с информацией о пользователе
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(HomeVideo, User)
+            .join(User, HomeVideo.user_id == User.id)
+            .where(HomeVideo.faculty_id == faculty_id)
+            .order_by(HomeVideo.submitted_at.asc())  # По порядку отправки
+        )
+        videos = result.all()
+    
+    sent = 0
+    failed = 0
+    
+    for home_video, user in videos:
+        try:
+            # Формируем имя пользователя
+            user_name = f"{user.first_name or ''} {user.surname or ''}".strip()
+            if not user_name:
+                user_name = f"User {user.telegram_id}"
+            
+            submission_time = home_video.submitted_at.strftime("%d.%m.%Y %H:%M") if home_video.submitted_at else "—"
+            
+            # Формируем сообщение со ссылкой
+            text = (
+                f"📹 <b>Видео от кандидата</b>\n\n"
+                f"👤 <b>{user_name}</b>\n"
+                f"🆔 ID: <code>{user.telegram_id}</code>\n"
+                f"⏰ Отправлено: {submission_time}\n\n"
+                f"🔗 <a href=\"{home_video.video_url}\">Смотреть видео</a>"
+            )
+            
+            await bot.send_message(
+                chat_id=video_chat_id,
+                text=text,
+                parse_mode="HTML",
+                disable_web_page_preview=False
+            )
+            sent += 1
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки видео {home_video.id} в чат {video_chat_id}: {e}")
+            failed += 1
+    
+    await state.clear()
+    
+    await callback.message.edit_text(
+        f"✅ <b>Отправка завершена!</b>\n\n"
+        f"Факультет: <b>{faculty_name}</b>\n\n"
+        f"📨 Отправлено: <b>{sent}</b>\n"
+        f"❌ Ошибок: <b>{failed}</b>"
+    )
+    await callback.answer("Готово!")
+
+
+@superadmin_router.callback_query(F.data == "rsv:cancel")
+async def callback_resend_cancel(callback: CallbackQuery, state: FSMContext):
+    """Отмена переотправки видео"""
+    await state.clear()
+    await callback.message.edit_text("❌ Отменено")
+    await callback.answer()
 
 
 # === Навигация ===
