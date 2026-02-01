@@ -845,6 +845,7 @@ async def callback_resend_confirm(callback: CallbackQuery, state: FSMContext, bo
     
     sent = 0
     failed = 0
+    current_chat_id = video_chat_id  # Может измениться при миграции
     
     for home_video, user in videos:
         try:
@@ -865,7 +866,7 @@ async def callback_resend_confirm(callback: CallbackQuery, state: FSMContext, bo
             )
             
             await bot.send_message(
-                chat_id=video_chat_id,
+                chat_id=current_chat_id,
                 text=text,
                 parse_mode="HTML",
                 disable_web_page_preview=False
@@ -873,16 +874,57 @@ async def callback_resend_confirm(callback: CallbackQuery, state: FSMContext, bo
             sent += 1
             
         except Exception as e:
-            logger.error(f"Ошибка отправки видео {home_video.id} в чат {video_chat_id}: {e}")
+            error_str = str(e)
+            
+            # Обработка миграции группы в супергруппу
+            if "migrated to a supergroup" in error_str or "migrate_to_chat_id" in error_str:
+                # Извлекаем новый chat_id из сообщения об ошибке
+                import re
+                match = re.search(r'id (-?\d+)', error_str)
+                if match:
+                    new_chat_id = int(match.group(1))
+                    logger.info(f"Группа мигрировала: {current_chat_id} -> {new_chat_id}")
+                    
+                    # Обновляем chat_id в БД
+                    async with async_session_maker() as db:
+                        result = await db.execute(
+                            select(Faculty).where(Faculty.id == faculty_id)
+                        )
+                        faculty = result.scalars().first()
+                        if faculty:
+                            faculty.video_chat_id = new_chat_id
+                            await db.commit()
+                            logger.info(f"Обновлён video_chat_id факультета {faculty_id}: {new_chat_id}")
+                    
+                    current_chat_id = new_chat_id
+                    
+                    # Повторяем отправку с новым chat_id
+                    try:
+                        await bot.send_message(
+                            chat_id=current_chat_id,
+                            text=text,
+                            parse_mode="HTML",
+                            disable_web_page_preview=False
+                        )
+                        sent += 1
+                        continue
+                    except Exception as retry_e:
+                        logger.error(f"Ошибка повторной отправки: {retry_e}")
+            
+            logger.error(f"Ошибка отправки видео {home_video.id} в чат {current_chat_id}: {e}")
             failed += 1
     
     await state.clear()
+    
+    migration_note = ""
+    if current_chat_id != video_chat_id:
+        migration_note = f"\n\n⚠️ Чат мигрировал, новый ID: <code>{current_chat_id}</code>"
     
     await callback.message.edit_text(
         f"✅ <b>Отправка завершена!</b>\n\n"
         f"Факультет: <b>{faculty_name}</b>\n\n"
         f"📨 Отправлено: <b>{sent}</b>\n"
-        f"❌ Ошибок: <b>{failed}</b>"
+        f"❌ Ошибок: <b>{failed}</b>{migration_note}"
     )
     await callback.answer("Готово!")
 

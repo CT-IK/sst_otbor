@@ -362,7 +362,8 @@ async def upload_video(
             user_telegram_id=user_telegram_id,
             faculty_name=faculty_name,
             video_url=video_url,
-            file_size_mb=round(file_size / (1024 * 1024), 1)
+            file_size_mb=round(file_size / (1024 * 1024), 1),
+            faculty_id=faculty_id
         )
     
     return VideoUploadResponse(
@@ -446,10 +447,12 @@ async def send_telegram_notification(
     user_telegram_id: int,
     faculty_name: str,
     video_url: str,
-    file_size_mb: float
+    file_size_mb: float,
+    faculty_id: int = None
 ):
     """
     Отправить уведомление в Telegram чат о новом видео.
+    Автоматически обрабатывает миграцию группы в супергруппу.
     """
     try:
         bot_token = settings.telegram_bot_token
@@ -480,7 +483,42 @@ async def send_telegram_notification(
             })
             
             if response.status_code != 200:
-                logger.error(f"Ошибка отправки в Telegram: {response.text}")
+                response_data = response.json()
+                
+                # Обработка миграции группы в супергруппу
+                if (response_data.get("error_code") == 400 and 
+                    "migrate_to_chat_id" in response_data.get("parameters", {})):
+                    
+                    new_chat_id = response_data["parameters"]["migrate_to_chat_id"]
+                    logger.info(f"Группа мигрировала: {chat_id} -> {new_chat_id}")
+                    
+                    # Обновляем chat_id в БД
+                    if faculty_id:
+                        from db.session import async_session_maker
+                        async with async_session_maker() as db:
+                            result = await db.execute(
+                                select(Faculty).where(Faculty.id == faculty_id)
+                            )
+                            faculty = result.scalars().first()
+                            if faculty:
+                                faculty.video_chat_id = new_chat_id
+                                await db.commit()
+                                logger.info(f"Обновлён video_chat_id факультета {faculty_id}: {new_chat_id}")
+                    
+                    # Повторяем отправку с новым chat_id
+                    retry_response = await client.post(url, json={
+                        "chat_id": new_chat_id,
+                        "text": text,
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": False
+                    })
+                    
+                    if retry_response.status_code == 200:
+                        logger.info(f"Уведомление отправлено в новый чат {new_chat_id}")
+                    else:
+                        logger.error(f"Ошибка повторной отправки: {retry_response.text}")
+                else:
+                    logger.error(f"Ошибка отправки в Telegram: {response.text}")
             else:
                 logger.info(f"Уведомление отправлено в чат {chat_id}")
                 
