@@ -151,7 +151,7 @@ async def get_interviews(
                 InterviewerInfo(
                     id=interviewer.id,
                     name=name,
-                    role=interviewer.role
+                    role="interviewer"  # У модели Interviewer нет поля role, используем константу
                 )
             )
     
@@ -174,10 +174,11 @@ async def get_interviews(
         
         assigned_interviewers = interviewers_map.get(interview.id, [])
         
+        # У модели User нет поля username, используем None
         response.append(InterviewListItem(
             id=interview.id,
             user_fio=user_fio,
-            user_username=user.username,
+            user_username=None,  # User model не имеет поля username
             date=slot.date,
             time=slot.time.strftime("%H:%M"),
             status=interview.status.value,
@@ -235,7 +236,7 @@ async def get_interview_detail(
             InterviewerInfo(
                 id=interviewer.id,
                 name=name,
-                role=interviewer.role
+                role="interviewer"  # У модели Interviewer нет поля role, используем константу
             )
         )
     
@@ -272,10 +273,11 @@ async def get_interview_detail(
                 )
             )
     
+    # У модели User нет поля username, используем None
     return InterviewDetailResponse(
         id=interview.id,
         user_fio=user_fio,
-        user_username=user.username,
+        user_username=None,  # User model не имеет поля username
         user_telegram_id=user.telegram_id,
         date=slot.date,
         time=slot.time.strftime("%H:%M"),
