@@ -650,6 +650,25 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
         )
         existing_interview = result.scalars().first()
         
+        # Сохраняем нужные значения из slot ДО commit()
+        slot_date = slot.date
+        slot_time = slot.time
+        faculty_id_for_notification = slot.faculty_id
+        
+        # Сохраняем данные пользователя ДО commit()
+        user_fio = ""
+        username = "не указан"
+        parts = []
+        if user.first_name:
+            parts.append(user.first_name)
+        if user.second_name:
+            parts.append(user.second_name)
+        if user.surname:
+            parts.append(user.surname)
+        user_fio = " ".join(parts) if parts else f"ID {user.telegram_id}"
+        if user.username:
+            username = user.username
+        
         if existing_interview:
             # Перезапись
             if existing_interview.reschedule_count >= 2:
@@ -659,66 +678,48 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
                 )
                 return
             
+            # Сохраняем reschedule_count ДО изменения
+            old_reschedule_count = existing_interview.reschedule_count
+            
             # Отменяем старую запись
             existing_interview.status = InterviewStatus.CANCELLED
             
             # Создаём новую запись
             new_interview = Interview(
                 user_id=user.id,
-                faculty_id=slot.faculty_id,
+                faculty_id=faculty_id_for_notification,
                 interview_time_slot_id=slot_id,
-                reschedule_count=existing_interview.reschedule_count + 1,
+                reschedule_count=old_reschedule_count + 1,
                 status=InterviewStatus.SCHEDULED
             )
             db.add(new_interview)
+            reschedule_count = old_reschedule_count + 1
         else:
             # Новая запись
             new_interview = Interview(
                 user_id=user.id,
-                faculty_id=slot.faculty_id,
+                faculty_id=faculty_id_for_notification,
                 interview_time_slot_id=slot_id,
                 reschedule_count=0,
                 status=InterviewStatus.SCHEDULED
             )
             db.add(new_interview)
+            reschedule_count = 0
         
         await db.commit()
         
-        # Сохраняем нужные значения до закрытия сессии
-        slot_date = slot.date
-        slot_time = slot.time
-        reschedule_count = new_interview.reschedule_count
+        # Получаем ID интервью после commit()
         interview_id = new_interview.id
-        faculty_id_for_notification = slot.faculty_id
         
-        # Получаем факультет и пользователя для уведомления
-        result = await db.execute(
-            select(Faculty).where(Faculty.id == faculty_id_for_notification)
-        )
-        faculty = result.scalars().first()
-        
-        result = await db.execute(
-            select(User).where(User.id == user.id)
-        )
-        user_obj = result.scalars().first()
-        
-        # Формируем ФИО пользователя
-        user_fio = ""
-        username = "не указан"
-        if user_obj:
-            parts = []
-            if user_obj.first_name:
-                parts.append(user_obj.first_name)
-            if user_obj.second_name:
-                parts.append(user_obj.second_name)
-            if user_obj.surname:
-                parts.append(user_obj.surname)
-            user_fio = " ".join(parts) if parts else f"ID {user_obj.telegram_id}"
-            if user_obj.username:
-                username = user_obj.username
+        # Получаем факультет для уведомления
+        async with async_session_maker() as db_notif:
+            result = await db_notif.execute(
+                select(Faculty).where(Faculty.id == faculty_id_for_notification)
+            )
+            faculty = result.scalars().first()
         
         reschedule_info = ""
-        if existing_interview:
+        if existing_interview and reschedule_count > 0:
             remaining = 2 - reschedule_count
             reschedule_info = f"\n\n⚠️ Осталось перезаписей: <b>{remaining}</b>"
         
