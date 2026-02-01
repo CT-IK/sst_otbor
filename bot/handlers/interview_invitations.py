@@ -546,27 +546,52 @@ async def callback_select_time(callback: CallbackQuery, state: FSMContext, bot: 
         )
         existing_interview = result.scalars().first()
         
+        # Дополнительно: проверяем все записи пользователя для отладки
+        result_all = await db.execute(
+            select(Interview).where(
+                Interview.user_id == user.id,
+                Interview.faculty_id == slot.faculty_id
+            ).order_by(Interview.id.desc())
+        )
+        all_interviews = result_all.scalars().all()
+        logger.info(f"[callback_select_time] Все записи для user_id={user.id}, faculty_id={slot.faculty_id}: {[(i.id, i.status, i.reschedule_count) for i in all_interviews]}")
+        
         # Проверяем лимит перезаписей
+        # Если есть активная запись, проверяем её reschedule_count
         if existing_interview:
-            if existing_interview.reschedule_count >= 2:
-                await callback.answer(
-                    "❌ Вы уже использовали все возможности перезаписи (максимум 2 раза)",
-                    show_alert=True
-                )
-                return
+            # Сохраняем reschedule_count в локальную переменную
+            current_reschedule_count = existing_interview.reschedule_count
+            logger.info(f"[callback_select_time] Найдена существующая активная запись для user_id={user.id}, interview_id={existing_interview.id}, reschedule_count={current_reschedule_count}, status={existing_interview.status}")
             
-            reschedule_count = existing_interview.reschedule_count + 1
-            remaining = 2 - reschedule_count
+            # Предупреждаем о лимите перезаписей, но не блокируем
+            # reschedule_count = 0 означает первую запись (можно перезаписаться 2 раза)
+            # reschedule_count = 1 означает первую перезапись (можно перезаписаться еще 1 раз)
+            # reschedule_count = 2 и более: превышен лимит, но разрешаем запись
+            if current_reschedule_count >= 2:
+                logger.info(f"[callback_select_time] Перезапись превышает лимит для user_id={user.id}, reschedule_count={current_reschedule_count}, но разрешаем")
+            
+            # Это перезапись - показываем информацию о перезаписи
+            reschedule_count = current_reschedule_count + 1
+            remaining = max(0, 2 - reschedule_count)  # Не показываем отрицательные значения
+            
+            if reschedule_count > 2:
+                reschedule_warning = f"\n\n⚠️ <b>Внимание:</b> Вы превысили рекомендуемый лимит перезаписей (рекомендуется максимум 2 раза)."
+            elif reschedule_count == 2:
+                reschedule_warning = f"\n\n⚠️ <b>Внимание:</b> Это ваша последняя рекомендуемая перезапись (максимум 2 раза)."
+            else:
+                reschedule_warning = f"\n\n⚠️ <b>Напоминание:</b> Вы можете перезаписаться максимум <b>2 раза</b>. Осталось перезаписей: <b>{remaining}</b>"
+            
             confirm_text = (
                 f"⚠️ <b>Перезапись на собеседование</b>\n\n"
                 f"📅 Дата: {format_date(slot.date)}\n"
                 f"🕐 Время: {slot.time.strftime('%H:%M')}\n\n"
-                f"Это будет ваша <b>{reschedule_count + 1}-я</b> запись.\n"
-                f"Осталось перезаписей: <b>{remaining}</b>\n\n"
+                f"Это будет ваша <b>{reschedule_count + 1}-я</b> запись.{reschedule_warning}\n\n"
                 f"❓ В случае технических неполадок обращайтесь к @yanejettt\n\n"
                 f"Подтвердите запись:"
             )
         else:
+            # Новая запись (первая запись, не перезапись)
+            logger.info(f"[callback_select_time] Новая запись (не перезапись) для user_id={user.id}, активных записей не найдено")
             confirm_text = (
                 f"📅 <b>Подтверждение записи</b>\n\n"
                 f"Дата: {format_date(slot.date)}\n"
@@ -654,6 +679,16 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
         )
         existing_interview = result.scalars().first()
         
+        # Дополнительно: проверяем все записи пользователя для отладки
+        result_all = await db.execute(
+            select(Interview).where(
+                Interview.user_id == user.id,
+                Interview.faculty_id == slot.faculty_id
+            ).order_by(Interview.id.desc())
+        )
+        all_interviews = result_all.scalars().all()
+        logger.info(f"[callback_confirm_booking] Все записи для user_id={user.id}, faculty_id={slot.faculty_id}: {[(i.id, i.status, i.reschedule_count) for i in all_interviews]}")
+        
         # Сохраняем нужные значения из slot ДО commit()
         slot_date = slot.date
         slot_time = slot.time
@@ -675,13 +710,14 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
             # Перезапись
             # Сохраняем reschedule_count ДО изменения
             old_reschedule_count = existing_interview.reschedule_count
+            logger.info(f"[callback_confirm_booking] Перезапись для user_id={user.id}, interview_id={existing_interview.id}, текущий reschedule_count={old_reschedule_count}, status={existing_interview.status}")
             
+            # Предупреждаем о лимите перезаписей, но не блокируем
+            # reschedule_count = 0: первая запись, можно перезаписаться 2 раза
+            # reschedule_count = 1: первая перезапись, можно перезаписаться еще 1 раз
+            # reschedule_count = 2 и более: превышен лимит, но разрешаем запись
             if old_reschedule_count >= 2:
-                await callback.answer(
-                    "❌ Вы уже использовали все возможности перезаписи (максимум 2 раза)",
-                    show_alert=True
-                )
-                return
+                logger.info(f"[callback_confirm_booking] Перезапись превышает лимит для user_id={user.id}, reschedule_count={old_reschedule_count}, но разрешаем")
             
             # Отменяем старую запись
             existing_interview.status = InterviewStatus.CANCELLED
@@ -699,6 +735,7 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
             reschedule_count = new_reschedule_count
         else:
             # Новая запись (первая запись, не перезапись)
+            logger.info(f"Новая запись (не перезапись) для user_id={user.id}")
             new_interview = Interview(
                 user_id=user.id,
                 faculty_id=faculty_id_for_notification,
@@ -728,11 +765,13 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
         reschedule_info = ""
         # Показываем информацию о перезаписях только если это действительно перезапись
         if existing_interview and reschedule_count > 0:
-            remaining = 2 - reschedule_count
-            if remaining >= 0:
-                reschedule_info = f"\n\n⚠️ Осталось перезаписей: <b>{remaining}</b>"
+            remaining = max(0, 2 - reschedule_count)  # Не показываем отрицательные значения
+            if reschedule_count > 2:
+                reschedule_info = f"\n\n⚠️ <b>Внимание:</b> Вы превысили рекомендуемый лимит перезаписей (рекомендуется максимум 2 раза)."
+            elif reschedule_count == 2:
+                reschedule_info = f"\n\n⚠️ <b>Внимание:</b> Вы использовали рекомендуемый лимит перезаписей (максимум 2 раза)."
             else:
-                reschedule_info = f"\n\n⚠️ Вы использовали все возможности перезаписи"
+                reschedule_info = f"\n\n⚠️ Осталось перезаписей: <b>{remaining}</b>"
         
         await callback.message.edit_text(
             f"✅ <b>Запись подтверждена!</b>\n\n"
