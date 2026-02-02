@@ -160,12 +160,14 @@ async def get_interviews(
     for interview in interviews:
         user = interview.user
         parts = []
-        if user.first_name:
-            parts.append(user.first_name)
-        if user.second_name:
-            parts.append(user.second_name)
-        if user.surname:
-            parts.append(user.surname)
+        # first_name обязательное поле, но может быть пустой строкой
+        if user.first_name and user.first_name.strip():
+            parts.append(user.first_name.strip())
+        if user.second_name and user.second_name.strip():
+            parts.append(user.second_name.strip())
+        if user.surname and user.surname.strip():
+            parts.append(user.surname.strip())
+        # Если нет ФИО, используем telegram_id
         user_fio = " ".join(parts) if parts else f"ID {user.telegram_id}"
         
         slot = interview.interview_time_slot
@@ -209,12 +211,14 @@ async def get_interview_detail(
     
     user = interview.user
     parts = []
-    if user.first_name:
-        parts.append(user.first_name)
-    if user.second_name:
-        parts.append(user.second_name)
-    if user.surname:
-        parts.append(user.surname)
+    # first_name обязательное поле, но может быть пустой строкой
+    if user.first_name and user.first_name.strip():
+        parts.append(user.first_name.strip())
+    if user.second_name and user.second_name.strip():
+        parts.append(user.second_name.strip())
+    if user.surname and user.surname.strip():
+        parts.append(user.surname.strip())
+    # Если нет ФИО, используем telegram_id
     user_fio = " ".join(parts) if parts else f"ID {user.telegram_id}"
     
     slot = interview.interview_time_slot
@@ -345,12 +349,14 @@ async def assign_interviewers(
     slot_time = slot.time
     
     parts = []
-    if user.first_name:
-        parts.append(user.first_name)
-    if user.second_name:
-        parts.append(user.second_name)
-    if user.surname:
-        parts.append(user.surname)
+    # first_name обязательное поле, но может быть пустой строкой
+    if user.first_name and user.first_name.strip():
+        parts.append(user.first_name.strip())
+    if user.second_name and user.second_name.strip():
+        parts.append(user.second_name.strip())
+    if user.surname and user.surname.strip():
+        parts.append(user.surname.strip())
+    # Если нет ФИО, используем telegram_id
     user_fio = " ".join(parts) if parts else f"ID {user.telegram_id}"
     # В модели User нет поля username, используем telegram_id для отображения
     username = f"{user.telegram_id}" if user.telegram_id else "не указан"

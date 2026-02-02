@@ -695,15 +695,16 @@ async def callback_confirm_booking(callback: CallbackQuery, state: FSMContext, b
         faculty_id_for_notification = slot.faculty_id
         
         # Сохраняем данные пользователя ДО commit()
-        user_fio = ""
         username = telegram_username if telegram_username else "не указан"
         parts = []
-        if user.first_name:
-            parts.append(user.first_name)
-        if user.second_name:
-            parts.append(user.second_name)
-        if user.surname:
-            parts.append(user.surname)
+        # first_name обязательное поле, но может быть пустой строкой
+        if user.first_name and user.first_name.strip():
+            parts.append(user.first_name.strip())
+        if user.second_name and user.second_name.strip():
+            parts.append(user.second_name.strip())
+        if user.surname and user.surname.strip():
+            parts.append(user.surname.strip())
+        # Если нет ФИО, используем telegram_id
         user_fio = " ".join(parts) if parts else f"ID {user.telegram_id}"
         
         if existing_interview:
